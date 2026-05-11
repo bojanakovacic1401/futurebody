@@ -2,11 +2,6 @@
 
 import type { LucideIcon } from "lucide-react";
 import { ChevronRight } from "lucide-react";
-import {
-  Line,
-  LineChart,
-  ResponsiveContainer,
-} from "recharts";
 import { cn } from "@/lib/constants";
 import { HUDCard } from "./HUDCard";
 
@@ -73,19 +68,20 @@ const sparklineData = [
 
 function MiniLine({ stroke }: { stroke: string }) {
   return (
-    <div className="hidden h-8 w-24 sm:block md:w-28">
-      <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={sparklineData}>
-          <Line
-            type="monotone"
-            dataKey="value"
-            stroke={stroke}
-            strokeWidth={2}
-            dot={false}
-          />
-        </LineChart>
-      </ResponsiveContainer>
-    </div>
+    <svg
+      viewBox="0 0 112 32"
+      className="hidden h-8 w-24 shrink-0 sm:block md:w-28"
+      aria-hidden="true"
+    >
+      <polyline
+        points="0,24 12,19 24,21 36,13 48,17 60,9 72,12 84,5 96,8 112,2"
+        fill="none"
+        stroke={stroke}
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }
 

@@ -1,9 +1,9 @@
-export type UserProfile = {
+export type AuthProvider = "demo" | "google";
+
+export type User = {
   id: string;
   name: string;
   email: string;
-  age?: number;
-  height?: number;
-  weight?: number;
   avatarUrl?: string;
+  provider?: AuthProvider;
 };
