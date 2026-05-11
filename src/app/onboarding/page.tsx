@@ -2,8 +2,9 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import type { ChangeEvent, ElementType, ReactNode } from "react";
 import {
   Activity,
   Apple,
@@ -29,26 +30,105 @@ import { getStressStatus, getStressStatusClass } from "@/lib/health/status";
 import { HealthRange } from "@/components/ui/HealthRange";
 import type { HealthInput } from "@/types/health";
 
+const PROFILE_STORAGE_KEY = "futurebody_profile_setup";
+
 const assets = {
   body: "/assets/body-hologram.png",
 };
 
-type Step = {
-  number: number;
-  label: string;
+type SetupProfile = {
+  fullName: string;
+  birthDate: string;
+  biologicalSex: "male" | "female" | "other";
+  heightCm: number;
+  dietType: string;
+  mealsPerDay: string;
+  sleepQuality: string;
+  activityLevel: string;
+  perceivedStress: string;
+  symptoms: string[];
+  notes: string;
+  labFileName: string;
 };
 
-const steps: Step[] = [
+const defaultProfile: SetupProfile = {
+  fullName: "Alex Morgan",
+  birthDate: "May 16, 1990",
+  biologicalSex: "male",
+  heightCm: 178,
+  dietType: "Omnivore",
+  mealsPerDay: "3",
+  sleepQuality: "Good",
+  activityLevel: "Moderate",
+  perceivedStress: "Moderate",
+  symptoms: ["None"],
+  notes: "",
+  labFileName: "",
+};
+
+const steps = [
   { number: 1, label: "Basic Info" },
   { number: 2, label: "Health Profile" },
   { number: 3, label: "Lifestyle" },
   { number: 4, label: "Review" },
 ];
 
+const dietTypes = [
+  "Omnivore",
+  "Mediterranean",
+  "Vegetarian",
+  "Vegan",
+  "High Protein",
+  "Low Carb",
+];
+
+const symptomOptions = [
+  "None",
+  "Fatigue",
+  "Headaches",
+  "Digestive Issues",
+  "Sleep Issues",
+  "Joint Pain",
+  "Anxiety",
+  "Depression",
+  "Other",
+];
+
+function loadProfile() {
+  if (typeof window === "undefined") {
+    return defaultProfile;
+  }
+
+  try {
+    const stored = window.localStorage.getItem(PROFILE_STORAGE_KEY);
+
+    if (!stored) {
+      return defaultProfile;
+    }
+
+    return {
+      ...defaultProfile,
+      ...JSON.parse(stored),
+    } as SetupProfile;
+  } catch {
+    return defaultProfile;
+  }
+}
+
+function saveProfile(profile: SetupProfile) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(profile));
+}
+
 function getNumber(input: HealthInput, key: keyof HealthInput, fallback: number) {
   const value = input[key];
 
-  if (typeof value === "number") return value;
+  if (typeof value === "number") {
+    return value;
+  }
 
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
@@ -56,20 +136,25 @@ function getNumber(input: HealthInput, key: keyof HealthInput, fallback: number)
 
 export default function OnboardingPage() {
   const router = useRouter();
-  const { input, setInput, updateInput } = useSyncedHealthInput();
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const { input, setInput } = useSyncedHealthInput();
+
+  const [profile, setProfile] = useState<SetupProfile>(defaultProfile);
   const [avatarUrl, setAvatarUrl] = useState("");
 
   useEffect(() => {
+    setProfile(loadProfile());
+
     const avatar = getStoredDashboardAvatar();
     setAvatarUrl(avatar?.imageUrl || "");
   }, []);
 
-  const scores = useMemo(() => calculateHealthScores(input), [input]);
+  useEffect(() => {
+    saveProfile(profile);
+  }, [profile]);
 
-  function saveAndGo(path: string) {
-    saveStoredHealthInput(input);
-    router.push(path);
-  }
+  const scores = useMemo(() => calculateHealthScores(input), [input]);
 
   const sleep = getNumber(input, "sleep", 7);
   const stepsPerDay = getNumber(input, "steps", 8000);
@@ -81,8 +166,65 @@ export default function OnboardingPage() {
   const bodyFat = getNumber(input, "bodyFat", 18);
   const alcohol = getNumber(input, "alcohol", 2);
 
-  function updateNumber(key: keyof HealthInput, value: number) {
-    updateInput(key, value as HealthInput[typeof key]);
+  const previewMood =
+    sleep >= 7 && stress <= 45 && stepsPerDay >= 8000
+      ? "improved"
+      : stress >= 70 || sleep < 6 || stepsPerDay < 4500
+        ? "risk"
+        : "baseline";
+
+  function updateInputNumber(key: keyof HealthInput, value: number) {
+    setInput({
+      ...input,
+      [key]: value,
+    } as HealthInput);
+  }
+
+  function updateProfile<K extends keyof SetupProfile>(
+    key: K,
+    value: SetupProfile[K]
+  ) {
+    setProfile((current) => ({
+      ...current,
+      [key]: value,
+    }));
+  }
+
+  function toggleSymptom(symptom: string) {
+    setProfile((current) => {
+      if (symptom === "None") {
+        return {
+          ...current,
+          symptoms: ["None"],
+        };
+      }
+
+      const withoutNone = current.symptoms.filter((item) => item !== "None");
+      const exists = withoutNone.includes(symptom);
+
+      return {
+        ...current,
+        symptoms: exists
+          ? withoutNone.filter((item) => item !== symptom)
+          : [...withoutNone, symptom],
+      };
+    });
+  }
+
+  function handleLabFile(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    updateProfile("labFileName", file.name);
+  }
+
+  function saveAndGo(path: string) {
+    saveStoredHealthInput(input);
+    saveProfile(profile);
+    router.push(path);
   }
 
   return (
@@ -111,37 +253,69 @@ export default function OnboardingPage() {
             </div>
           </HUDPanel>
 
-          <div className="grid gap-4 xl:grid-cols-[1.05fr_1fr_1fr] xl:auto-rows-[260px]">
-            <SetupCard icon={UserRound} title="Basic Profile" subtitle="Tell us about yourself">
-              <div className="space-y-3">
-                <TextInput label="Full Name" placeholder="Alex Morgan" />
-                <TextInput label="Date of Birth" placeholder="May 16, 1990" />
+          <div className="grid gap-4 xl:grid-cols-[1.05fr_1fr_1fr] xl:auto-rows-[330px]">
+            <SetupCard
+              icon={UserRound}
+              title="Basic Profile"
+              subtitle="Tell us about yourself"
+            >
+              <div className="space-y-4">
+                <TextInput
+                  label="Full Name"
+                  value={profile.fullName}
+                  placeholder="Alex Morgan"
+                  onChange={(value) => updateProfile("fullName", value)}
+                />
+
+                <TextInput
+                  label="Date of Birth"
+                  value={profile.birthDate}
+                  placeholder="May 16, 1990"
+                  onChange={(value) => updateProfile("birthDate", value)}
+                />
 
                 <div>
                   <Label>Biological Sex</Label>
                   <div className="grid grid-cols-3 overflow-hidden rounded-xl border border-cyan-300/15 bg-slate-950/45">
-                    {["Male", "Female", "Other"].map((item) => (
+                    {[
+                      ["male", "Male"],
+                      ["female", "Female"],
+                      ["other", "Other"],
+                    ].map(([value, label]) => (
                       <button
-                        key={item}
+                        key={value}
                         type="button"
+                        onClick={() =>
+                          updateProfile(
+                            "biologicalSex",
+                            value as SetupProfile["biologicalSex"]
+                          )
+                        }
                         className={[
                           "h-10 border-r border-cyan-300/10 text-xs last:border-r-0",
-                          item === "Male" ? "bg-cyan-400/15 text-cyan-200" : "text-slate-400",
+                          profile.biologicalSex === value
+                            ? "bg-cyan-400/15 text-cyan-200"
+                            : "text-slate-400 hover:bg-cyan-400/5",
                         ].join(" ")}
                       >
-                        {item}
+                        {label}
                       </button>
                     ))}
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
-                  <NumberBox label="Height" value={178} suffix="cm" onChange={() => {}} />
+                  <StaticBox
+                    label="Height"
+                    value={profile.heightCm}
+                    suffix="cm"
+                  />
+
                   <NumberBox
                     label="Weight"
                     value={weight}
                     suffix="kg"
-                    onChange={(value) => updateNumber("weight", value)}
+                    onChange={(value) => updateInputNumber("weight", value)}
                   />
                 </div>
 
@@ -152,25 +326,38 @@ export default function OnboardingPage() {
                   max={45}
                   step={1}
                   suffix="%"
-                  onChange={(value) => updateNumber("bodyFat", value)}
+                  onChange={(value) => updateInputNumber("bodyFat", value)}
                 />
               </div>
             </SetupCard>
 
-            <SetupCard icon={Moon} title="Sleep" subtitle="Your sleep patterns & quality">
+            <SetupCard
+              icon={Moon}
+              title="Sleep"
+              subtitle="Your sleep patterns & quality"
+            >
               <div className="space-y-4">
                 <div>
                   <Label>Average Sleep</Label>
                   <div className="flex items-end gap-2">
-                    <span className="text-3xl font-light text-cyan-200">{Math.floor(sleep)}</span>
+                    <span className="text-3xl font-light text-cyan-200">
+                      {Math.floor(sleep)}
+                    </span>
                     <span className="mb-1 text-sm text-slate-400">h</span>
-                    <span className="text-3xl font-light text-white">{Math.round((sleep % 1) * 60)}</span>
+                    <span className="text-3xl font-light text-white">
+                      {Math.round((sleep % 1) * 60)}
+                    </span>
                     <span className="mb-1 text-sm text-slate-400">m</span>
                     <Sparkline className="ml-auto" />
                   </div>
                 </div>
 
-                <Segmented label="Sleep Quality" options={["Poor", "Fair", "Good", "Excellent"]} active="Good" />
+                <Segmented
+                  label="Sleep Quality"
+                  options={["Poor", "Fair", "Good", "Excellent"]}
+                  active={profile.sleepQuality}
+                  onChange={(value) => updateProfile("sleepQuality", value)}
+                />
 
                 <HealthRange
                   label="Average Sleep"
@@ -179,33 +366,52 @@ export default function OnboardingPage() {
                   max={10}
                   step={0.5}
                   suffix="h"
-                  onChange={(value) => updateNumber("sleep", value)}
+                  onChange={(value) => updateInputNumber("sleep", value)}
                 />
               </div>
             </SetupCard>
 
-            <SetupCard icon={Activity} title="Activity" subtitle="Your movement & exercise">
+            <SetupCard
+              icon={Activity}
+              title="Activity"
+              subtitle="Your movement & exercise"
+            >
               <div className="space-y-4">
                 <Segmented
                   label="Activity Level"
-                  options={["Sedentary", "Light", "Moderate", "Active", "Very Active"]}
-                  active="Moderate"
+                  options={[
+                    "Sedentary",
+                    "Light",
+                    "Moderate",
+                    "Active",
+                    "Very Active",
+                  ]}
+                  active={profile.activityLevel}
+                  onChange={(value) => updateProfile("activityLevel", value)}
                 />
 
                 <StepperInput
                   label="Exercise"
                   value={strength}
                   suffix="days per week"
-                  onMinus={() => updateNumber("strength", Math.max(0, strength - 1))}
-                  onPlus={() => updateNumber("strength", Math.min(7, strength + 1))}
+                  onMinus={() =>
+                    updateInputNumber("strength", Math.max(0, strength - 1))
+                  }
+                  onPlus={() =>
+                    updateInputNumber("strength", Math.min(7, strength + 1))
+                  }
                 />
 
                 <StepperInput
                   label="Avg. Duration"
                   value={cardio}
                   suffix="mins"
-                  onMinus={() => updateNumber("cardio", Math.max(0, cardio - 15))}
-                  onPlus={() => updateNumber("cardio", Math.min(300, cardio + 15))}
+                  onMinus={() =>
+                    updateInputNumber("cardio", Math.max(0, cardio - 15))
+                  }
+                  onPlus={() =>
+                    updateInputNumber("cardio", Math.min(300, cardio + 15))
+                  }
                 />
 
                 <HealthRange
@@ -215,15 +421,30 @@ export default function OnboardingPage() {
                   max={20000}
                   step={500}
                   suffix="steps"
-                  onChange={(value) => updateNumber("steps", value)}
+                  onChange={(value) => updateInputNumber("steps", value)}
                 />
               </div>
             </SetupCard>
 
-            <SetupCard icon={Apple} title="Nutrition" subtitle="Your eating habits">
+            <SetupCard
+              icon={Apple}
+              title="Nutrition"
+              subtitle="Your eating habits"
+            >
               <div className="space-y-4">
-                <SelectBox label="Diet Type" value="Omnivore" />
-                <Segmented label="Meals per Day" options={["1", "2", "3", "4+"]} active="3" />
+                <SelectBox
+                  label="Diet Type"
+                  value={profile.dietType}
+                  options={dietTypes}
+                  onChange={(value) => updateProfile("dietType", value)}
+                />
+
+                <Segmented
+                  label="Meals per Day"
+                  options={["1", "2", "3", "4+"]}
+                  active={profile.mealsPerDay}
+                  onChange={(value) => updateProfile("mealsPerDay", value)}
+                />
 
                 <HealthRange
                   label="Diet Quality"
@@ -232,7 +453,7 @@ export default function OnboardingPage() {
                   max={100}
                   step={1}
                   suffix="/100"
-                  onChange={(value) => updateNumber("diet", value)}
+                  onChange={(value) => updateInputNumber("diet", value)}
                 />
 
                 <HealthRange
@@ -242,25 +463,53 @@ export default function OnboardingPage() {
                   max={8}
                   step={1}
                   suffix="drinks/wk"
-                  onChange={(value) => updateNumber("alcohol", value)}
+                  onChange={(value) => updateInputNumber("alcohol", value)}
                 />
               </div>
             </SetupCard>
 
-            <SetupCard icon={Waves} title="Stress" subtitle="Stress & mental wellbeing">
+            <SetupCard
+              icon={Waves}
+              title="Stress"
+              subtitle="Stress & mental wellbeing"
+            >
               <div className="space-y-4">
                 <Segmented
                   label="Perceived Stress"
                   options={["Low", "Moderate", "High"]}
-                  active={stress <= 35 ? "Low" : stress <= 65 ? "Moderate" : "High"}
+                  active={profile.perceivedStress}
+                  onChange={(value) => {
+                    updateProfile("perceivedStress", value);
+
+                    if (value === "Low") {
+                      updateInputNumber("stress", Math.min(stress, 30));
+                    }
+
+                    if (value === "Moderate") {
+                      updateInputNumber(
+                        "stress",
+                        Math.max(36, Math.min(stress, 65))
+                      );
+                    }
+
+                    if (value === "High") {
+                      updateInputNumber("stress", Math.max(stress, 70));
+                    }
+                  }}
                 />
 
                 <div>
                   <Label>Stress Score est.</Label>
                   <div className="flex items-end gap-2">
-                    <span className="text-3xl font-light text-white">{stress}</span>
+                    <span className="text-3xl font-light text-white">
+                      {stress}
+                    </span>
                     <span className="mb-1 text-sm text-slate-500">/100</span>
-                    <span className={`mb-1 ml-3 text-xs font-bold uppercase ${getStressStatusClass(stress)}`}>
+                    <span
+                      className={`mb-1 ml-3 text-xs font-bold uppercase ${getStressStatusClass(
+                        stress
+                      )}`}
+                    >
                       {getStressStatus(stress)}
                     </span>
                     <Sparkline className="ml-auto" />
@@ -274,25 +523,30 @@ export default function OnboardingPage() {
                   max={100}
                   step={1}
                   suffix="/100"
-                  onChange={(value) => updateNumber("stress", value)}
+                  onChange={(value) => updateInputNumber("stress", value)}
                 />
               </div>
             </SetupCard>
 
-            <SetupCard icon={ShieldPlus} title="Symptoms" subtitle="Any ongoing symptoms?">
+            <SetupCard
+              icon={ShieldPlus}
+              title="Symptoms"
+              subtitle="Any ongoing symptoms?"
+            >
               <div className="space-y-4">
                 <Label>Select all that apply</Label>
 
                 <div className="flex flex-wrap gap-2">
-                  {["None", "Fatigue", "Headaches", "Digestive Issues", "Sleep Issues", "Joint Pain", "Anxiety", "Depression", "Other"].map((item) => (
+                  {symptomOptions.map((item) => (
                     <button
                       key={item}
                       type="button"
+                      onClick={() => toggleSymptom(item)}
                       className={[
                         "rounded-lg border px-3 py-2 text-xs",
-                        item === "None"
+                        profile.symptoms.includes(item)
                           ? "border-cyan-300/50 bg-cyan-400/15 text-cyan-200"
-                          : "border-cyan-300/10 bg-slate-950/45 text-slate-400",
+                          : "border-cyan-300/10 bg-slate-950/45 text-slate-400 hover:bg-cyan-400/5",
                       ].join(" ")}
                     >
                       {item}
@@ -301,6 +555,8 @@ export default function OnboardingPage() {
                 </div>
 
                 <textarea
+                  value={profile.notes}
+                  onChange={(event) => updateProfile("notes", event.target.value)}
                   placeholder="Add any additional details..."
                   className="min-h-[84px] w-full resize-none rounded-xl border border-cyan-300/10 bg-slate-950/50 px-4 py-3 text-sm text-white outline-none placeholder:text-slate-600"
                 />
@@ -325,20 +581,48 @@ export default function OnboardingPage() {
                   Your profile currently suggests the biggest leverage is:
                 </p>
                 <div className="rounded-xl border border-cyan-300/10 bg-cyan-400/10 p-4 text-lg font-semibold text-cyan-200">
-                  {sleep < 7 ? "Improve Sleep" : stress > 55 ? "Reduce Stress" : stepsPerDay < 8000 ? "Increase Movement" : "Maintain Momentum"}
+                  {sleep < 7
+                    ? "Improve Sleep"
+                    : stress > 55
+                      ? "Reduce Stress"
+                      : stepsPerDay < 8000
+                        ? "Increase Movement"
+                        : "Maintain Momentum"}
                 </div>
               </div>
             </SetupCard>
 
-            <SetupCard icon={FlaskConical} title="Optional Labs" subtitle="Add recent lab results">
+            <SetupCard
+              icon={FlaskConical}
+              title="Optional Labs"
+              subtitle="Add recent lab results"
+            >
               <div className="space-y-3">
-                <div className="flex h-16 items-center justify-center rounded-xl border border-dashed border-cyan-300/30 bg-slate-950/45 text-center">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".pdf,image/png,image/jpeg,image/webp"
+                  onChange={handleLabFile}
+                  className="hidden"
+                />
+
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="flex h-20 w-full items-center justify-center rounded-xl border border-dashed border-cyan-300/30 bg-slate-950/45 text-center transition hover:border-cyan-300/60 hover:bg-cyan-400/10"
+                >
                   <div>
-                    <UploadCloud className="mx-auto text-cyan-300" size={20} />
-                    <div className="mt-1 text-xs font-bold text-white">Upload Lab Report</div>
-                    <div className="text-[10px] text-slate-500">PDF, PNG or JPG max 10MB</div>
+                    <UploadCloud className="mx-auto text-cyan-300" size={22} />
+                    <div className="mt-1 text-xs font-bold text-white">
+                      {profile.labFileName
+                        ? "Lab Report Selected"
+                        : "Upload Lab Report"}
+                    </div>
+                    <div className="max-w-[260px] truncate text-[10px] text-slate-500">
+                      {profile.labFileName || "PDF, PNG or JPG max 10MB"}
+                    </div>
                   </div>
-                </div>
+                </button>
 
                 {[
                   ["Vitamin D", "32 ng/mL"],
@@ -346,7 +630,10 @@ export default function OnboardingPage() {
                   ["Ferritin", "78 ng/mL"],
                   ["HbA1c", "5.2 %"],
                 ].map(([label, value]) => (
-                  <div key={label} className="flex items-center justify-between rounded-lg border border-cyan-300/10 bg-slate-950/45 px-3 py-2 text-sm">
+                  <div
+                    key={label}
+                    className="flex items-center justify-between rounded-lg border border-cyan-300/10 bg-slate-950/45 px-3 py-2 text-sm"
+                  >
                     <span className="text-slate-400">{label}</span>
                     <span className="flex items-center gap-2 text-white">
                       {value}
@@ -359,7 +646,10 @@ export default function OnboardingPage() {
           </div>
 
           <div className="mt-4 flex items-center justify-between gap-4">
-            <Link href="/login" className="rounded-xl border border-cyan-300/15 bg-slate-950/50 px-7 py-3 text-sm text-slate-300">
+            <Link
+              href="/login"
+              className="rounded-xl border border-cyan-300/15 bg-slate-950/50 px-7 py-3 text-sm text-slate-300"
+            >
               ← Back
             </Link>
 
@@ -383,8 +673,8 @@ export default function OnboardingPage() {
           </div>
         </div>
 
-        <aside className="min-w-0 xl:pt-[92px]">
-          <div className="sticky top-20 space-y-4">
+        <aside className="min-w-0 xl:pt-[112px]">
+          <div className="sticky top-24 space-y-4">
             <HUDPanel className="overflow-hidden p-4">
               <div className="mb-3">
                 <h2 className="text-sm font-bold uppercase tracking-[0.18em] text-white">
@@ -397,26 +687,47 @@ export default function OnboardingPage() {
                 <div className="absolute inset-0 bg-[linear-gradient(rgba(34,211,238,.04)_1px,transparent_1px),linear-gradient(90deg,rgba(34,211,238,.04)_1px,transparent_1px)] bg-[size:32px_32px]" />
                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(34,211,238,.18),transparent_58%)]" />
 
-                <Image
-                  src={avatarUrl || assets.body}
-                  alt="FutureBody preview"
-                  width={700}
-                  height={900}
-                  priority
-                  unoptimized={Boolean(avatarUrl)}
+                <div
                   className={[
-                    "relative z-10 mx-auto h-full w-auto scale-[1.08] object-contain drop-shadow-[0_0_45px_rgba(34,211,238,.9)] transition-all duration-500",
-                    sleep >= 7 && stress <= 45 && stepsPerDay >= 8000
+                    "relative z-10 flex h-full w-full items-center justify-center transition-all duration-500",
+                    previewMood === "improved"
                       ? "brightness-110 saturate-125"
-                      : stress >= 70 || sleep < 6
+                      : previewMood === "risk"
                         ? "brightness-75 saturate-75 opacity-85"
                         : "brightness-100",
                   ].join(" ")}
-                />
+                  style={{
+                    transform:
+                      previewMood === "improved"
+                        ? "translateY(-4px) scale(1.03)"
+                        : previewMood === "risk"
+                          ? "translateY(8px) scale(0.98) rotate(-1deg)"
+                          : "translateY(0) scale(1)",
+                  }}
+                >
+                  <Image
+                    src={avatarUrl || assets.body}
+                    alt="FutureBody preview"
+                    width={700}
+                    height={900}
+                    priority
+                    unoptimized={Boolean(avatarUrl)}
+                    className={[
+                      "h-full w-auto object-contain drop-shadow-[0_0_45px_rgba(34,211,238,.9)] transition-all duration-500",
+                      avatarUrl ? "rounded-2xl" : "scale-[1.08]",
+                    ].join(" ")}
+                  />
+                </div>
+
+                <div className="absolute bottom-3 left-3 rounded-full border border-cyan-300/20 bg-slate-950/70 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-cyan-300">
+                  {previewMood} projection
+                </div>
               </div>
 
               <div className="mt-3 rounded-xl border border-cyan-300/10 bg-slate-950/45 p-3 text-xs text-slate-400">
-                Live impact preview updates from your current health inputs.
+                Live preview uses local visual transforms. Real body-shape
+                regeneration needs an AI generation click, not continuous slider
+                updates.
               </div>
             </HUDPanel>
 
@@ -426,19 +737,44 @@ export default function OnboardingPage() {
                   <h2 className="text-sm font-bold uppercase tracking-[0.16em] text-white">
                     Projected Baseline Scores
                   </h2>
-                  <p className="text-xs text-slate-500">Est. based on provided data</p>
+                  <p className="text-xs text-slate-500">
+                    Est. based on provided data
+                  </p>
                 </div>
 
-                <Link href="/body" className="rounded-lg border border-cyan-300/25 bg-cyan-400/10 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.14em] text-cyan-300">
+                <Link
+                  href="/body"
+                  className="rounded-lg border border-cyan-300/25 bg-cyan-400/10 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.14em] text-cyan-300"
+                >
                   View Details
                 </Link>
               </div>
 
               <div className="space-y-3">
-                <PreviewScore icon={Zap} label="Energy Score" value={scores.energy} status="Good" />
-                <PreviewScore icon={Brain} label="Focus Score" value={scores.focus} status="Good" />
-                <PreviewScore icon={Moon} label="Sleep Score" value={scores.recovery} status="Good" />
-                <PreviewScore icon={Activity} label="Recovery Score" value={scores.readiness} status="Good" />
+                <PreviewScore
+                  icon={Zap}
+                  label="Energy Score"
+                  value={scores.energy}
+                  status="Good"
+                />
+                <PreviewScore
+                  icon={Brain}
+                  label="Focus Score"
+                  value={scores.focus}
+                  status="Good"
+                />
+                <PreviewScore
+                  icon={Moon}
+                  label="Sleep Score"
+                  value={scores.recovery}
+                  status="Good"
+                />
+                <PreviewScore
+                  icon={Activity}
+                  label="Recovery Score"
+                  value={scores.readiness}
+                  status="Good"
+                />
                 <PreviewScore
                   icon={Waves}
                   label="Stress Score"
@@ -446,8 +782,18 @@ export default function OnboardingPage() {
                   status={getStressStatus(stress)}
                   amber={stress > 35}
                 />
-                <PreviewScore icon={Dumbbell} label="Metabolic Score" value={scores.metabolic} status="Good" />
-                <PreviewScore icon={Calendar} label="Longevity Score" value={Math.max(50, Math.min(95, scores.readiness - 4))} status="Good" />
+                <PreviewScore
+                  icon={Dumbbell}
+                  label="Metabolic Score"
+                  value={scores.metabolic}
+                  status="Good"
+                />
+                <PreviewScore
+                  icon={Calendar}
+                  label="Longevity Score"
+                  value={Math.max(50, Math.min(95, scores.readiness - 4))}
+                  status="Good"
+                />
               </div>
 
               <div className="mt-4 rounded-xl border border-cyan-300/10 bg-slate-950/45 p-3 text-xs text-slate-500">
@@ -461,9 +807,20 @@ export default function OnboardingPage() {
   );
 }
 
-function HUDPanel({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+function HUDPanel({
+  children,
+  className = "",
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
   return (
-    <div className={["relative overflow-hidden rounded-2xl border border-cyan-300/15 bg-slate-950/45 shadow-[0_0_28px_rgba(8,145,178,.12)]", className].join(" ")}>
+    <div
+      className={[
+        "relative overflow-hidden rounded-2xl border border-cyan-300/15 bg-slate-950/45 shadow-[0_0_28px_rgba(8,145,178,.12)]",
+        className,
+      ].join(" ")}
+    >
       <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(34,211,238,.025)_1px,transparent_1px),linear-gradient(90deg,rgba(34,211,238,.025)_1px,transparent_1px)] bg-[size:38px_38px]" />
       <div className="relative z-10">{children}</div>
     </div>
@@ -477,10 +834,10 @@ function SetupCard({
   children,
   className = "",
 }: {
-  icon: React.ElementType;
+  icon: ElementType;
   title: string;
   subtitle: string;
-  children: React.ReactNode;
+  children: ReactNode;
   className?: string;
 }) {
   return (
@@ -498,7 +855,7 @@ function SetupCard({
         </div>
       </div>
 
-      <div className="max-h-[190px] overflow-y-auto pr-1">{children}</div>
+      <div>{children}</div>
     </HUDPanel>
   );
 }
@@ -509,24 +866,35 @@ function Stepper() {
       {steps.map((step) => (
         <div key={step.number} className="relative">
           <div className="flex items-center">
-            <div className={[
-              "flex h-8 w-8 items-center justify-center rounded-full border text-xs font-bold",
-              step.number === 2
-                ? "border-cyan-300 bg-cyan-400/20 text-cyan-200 shadow-[0_0_18px_rgba(34,211,238,.45)]"
-                : step.number < 2
-                  ? "border-cyan-300/40 bg-cyan-400/10 text-cyan-300"
-                  : "border-slate-700 bg-slate-950 text-slate-500",
-            ].join(" ")}
+            <div
+              className={[
+                "flex h-8 w-8 items-center justify-center rounded-full border text-xs font-bold",
+                step.number === 2
+                  ? "border-cyan-300 bg-cyan-400/20 text-cyan-200 shadow-[0_0_18px_rgba(34,211,238,.45)]"
+                  : step.number < 2
+                    ? "border-cyan-300/40 bg-cyan-400/10 text-cyan-300"
+                    : "border-slate-700 bg-slate-950 text-slate-500",
+              ].join(" ")}
             >
               {step.number}
             </div>
 
             {step.number !== 4 ? (
-              <div className={["h-px flex-1", step.number <= 2 ? "bg-cyan-300/60" : "bg-slate-700"].join(" ")} />
+              <div
+                className={[
+                  "h-px flex-1",
+                  step.number <= 2 ? "bg-cyan-300/60" : "bg-slate-700",
+                ].join(" ")}
+              />
             ) : null}
           </div>
 
-          <div className={["mt-2 text-[9px] font-bold uppercase tracking-[0.12em]", step.number === 2 ? "text-cyan-300" : "text-slate-500"].join(" ")}>
+          <div
+            className={[
+              "mt-2 text-[9px] font-bold uppercase tracking-[0.12em]",
+              step.number === 2 ? "text-cyan-300" : "text-slate-500",
+            ].join(" ")}
+          >
             {step.label}
           </div>
         </div>
@@ -535,15 +903,31 @@ function Stepper() {
   );
 }
 
-function Label({ children }: { children: React.ReactNode }) {
-  return <div className="mb-2 block text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">{children}</div>;
+function Label({ children }: { children: ReactNode }) {
+  return (
+    <div className="mb-2 block text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">
+      {children}
+    </div>
+  );
 }
 
-function TextInput({ label, placeholder }: { label: string; placeholder: string }) {
+function TextInput({
+  label,
+  value,
+  placeholder,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  placeholder: string;
+  onChange: (value: string) => void;
+}) {
   return (
     <label className="block">
       <Label>{label}</Label>
       <input
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
         className="h-10 w-full rounded-lg border border-cyan-300/10 bg-slate-950/45 px-3 text-sm text-white outline-none placeholder:text-slate-600"
       />
@@ -578,14 +962,51 @@ function NumberBox({
   );
 }
 
-function SelectBox({ label, value }: { label: string; value: string }) {
+function StaticBox({
+  label,
+  value,
+  suffix,
+}: {
+  label: string;
+  value: number;
+  suffix: string;
+}) {
+  return (
+    <div className="block">
+      <Label>{label}</Label>
+      <div className="flex h-10 items-center rounded-lg border border-cyan-300/10 bg-slate-950/35 px-3">
+        <span className="text-sm text-white">{value}</span>
+        <span className="ml-auto text-xs text-slate-500">{suffix}</span>
+      </div>
+    </div>
+  );
+}
+
+function SelectBox({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: string[];
+  onChange: (value: string) => void;
+}) {
   return (
     <label className="block">
       <Label>{label}</Label>
-      <div className="flex h-10 items-center justify-between rounded-lg border border-cyan-300/10 bg-slate-950/45 px-3 text-sm text-white">
-        {value}
-        <span className="text-slate-500">⌄</span>
-      </div>
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="h-10 w-full rounded-lg border border-cyan-300/10 bg-slate-950/45 px-3 text-sm text-white outline-none"
+      >
+        {options.map((item) => (
+          <option key={item} value={item} className="bg-slate-950 text-white">
+            {item}
+          </option>
+        ))}
+      </select>
     </label>
   );
 }
@@ -594,22 +1015,32 @@ function Segmented({
   label,
   options,
   active,
+  onChange,
 }: {
   label: string;
   options: string[];
   active: string;
+  onChange: (value: string) => void;
 }) {
   return (
     <div>
       <Label>{label}</Label>
-      <div className="grid overflow-hidden rounded-lg border border-cyan-300/10 bg-slate-950/45" style={{ gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))` }}>
+      <div
+        className="grid overflow-hidden rounded-lg border border-cyan-300/10 bg-slate-950/45"
+        style={{
+          gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))`,
+        }}
+      >
         {options.map((item) => (
           <button
             key={item}
             type="button"
+            onClick={() => onChange(item)}
             className={[
               "h-9 border-r border-cyan-300/10 text-[10px] last:border-r-0",
-              item === active ? "bg-cyan-400/15 text-cyan-200" : "text-slate-500",
+              item === active
+                ? "bg-cyan-400/15 text-cyan-200"
+                : "text-slate-500 hover:bg-cyan-400/5",
             ].join(" ")}
           >
             {item}
@@ -643,10 +1074,18 @@ function StepperInput({
         </div>
 
         <div className="flex gap-2">
-          <button type="button" onClick={onMinus} className="flex h-9 w-9 items-center justify-center rounded-lg border border-cyan-300/15 text-cyan-300">
+          <button
+            type="button"
+            onClick={onMinus}
+            className="flex h-9 w-9 items-center justify-center rounded-lg border border-cyan-300/15 text-cyan-300"
+          >
             ‹
           </button>
-          <button type="button" onClick={onPlus} className="flex h-9 w-9 items-center justify-center rounded-lg border border-cyan-300/15 text-cyan-300">
+          <button
+            type="button"
+            onClick={onPlus}
+            className="flex h-9 w-9 items-center justify-center rounded-lg border border-cyan-300/15 text-cyan-300"
+          >
             +
           </button>
         </div>
@@ -676,7 +1115,7 @@ function PreviewScore({
   status,
   amber = false,
 }: {
-  icon: React.ElementType;
+  icon: ElementType;
   label: string;
   value: number;
   status: string;
@@ -684,7 +1123,13 @@ function PreviewScore({
 }) {
   return (
     <div className="grid grid-cols-[28px_1fr_52px_48px_78px] items-center gap-2">
-      <div className={`flex h-8 w-8 items-center justify-center rounded-full border ${amber ? "border-orange-300/35 text-orange-300" : "border-cyan-300/25 text-cyan-300"}`}>
+      <div
+        className={`flex h-8 w-8 items-center justify-center rounded-full border ${
+          amber
+            ? "border-orange-300/35 text-orange-300"
+            : "border-cyan-300/25 text-cyan-300"
+        }`}
+      >
         <Icon size={15} />
       </div>
 
@@ -697,7 +1142,11 @@ function PreviewScore({
         <span className="text-[10px] text-slate-500">/100</span>
       </div>
 
-      <div className={`text-[10px] font-bold uppercase ${amber ? "text-orange-300" : "text-emerald-300"}`}>
+      <div
+        className={`text-[10px] font-bold uppercase ${
+          amber ? "text-orange-300" : "text-emerald-300"
+        }`}
+      >
         {status}
       </div>
 
@@ -710,11 +1159,16 @@ function MetricLine({ label, value }: { label: string; value: number }) {
   return (
     <div>
       <div className="mb-1 flex items-center justify-between text-xs">
-        <span className="uppercase tracking-[0.14em] text-slate-500">{label}</span>
+        <span className="uppercase tracking-[0.14em] text-slate-500">
+          {label}
+        </span>
         <span className="text-cyan-300">{value}/100</span>
       </div>
       <div className="h-1.5 overflow-hidden rounded-full bg-slate-800">
-        <div className="h-full rounded-full bg-cyan-300" style={{ width: `${Math.max(5, Math.min(100, value))}%` }} />
+        <div
+          className="h-full rounded-full bg-cyan-300"
+          style={{ width: `${Math.max(5, Math.min(100, value))}%` }}
+        />
       </div>
     </div>
   );

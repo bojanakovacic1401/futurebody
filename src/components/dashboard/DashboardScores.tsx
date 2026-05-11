@@ -10,11 +10,11 @@ import {
   Zap,
 } from "lucide-react";
 import { DEFAULT_HEALTH_INPUT } from "@/lib/constants";
-import { calculateScores } from "@/lib/health/scoring";
+import { calculateHealthScores } from "@/lib/health/scoring";
 import { MetricCard } from "@/components/ui/MetricCard";
 
 export function DashboardScores() {
-  const scores = calculateScores(DEFAULT_HEALTH_INPUT);
+  const scores = calculateHealthScores(DEFAULT_HEALTH_INPUT);
 
   return (
     <section className="space-y-3">

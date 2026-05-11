@@ -86,26 +86,27 @@ The output should look like a realistic full-body version of the person, not a c
 VISUAL STYLE:
 - realistic human face and body
 - full body portrait
-- natural skin tone
-- believable future version of the uploaded person
-- dark premium health-tech background
-- subtle cyan-blue rim light only
-- subtle transparent medical HUD glow around the body
-- realistic wellness / fitness app aesthetic
+- isolated person only
+- transparent background
+- alpha channel background
+- no environment
+- no room
+- no wall
+- no floor
+- no dark background
+- no premium health-tech background behind the person
+- no UI panels
+- no text
+- no logos
 - no green body color
 - no full-body x-ray
 - no skeleton as the main subject
 - no nudity
 - no sexualized pose
 - no revealing clothing
-- no underwear
-- no bikini
-- no hospital patient look
-- no text
-- no logos
-- no UI panels
-- clean premium sci-fi wellness aesthetic
 - clothing should be fitted dark athletic wellness outfit, tasteful and non-revealing
+- subtle cyan-blue rim light only on the edges of the body
+- keep the rest of the canvas transparent
 
 Identity:
 - Use the uploaded photo as identity reference for face, hair, ethnicity, general age range and facial features.
@@ -283,6 +284,8 @@ export async function POST(request: Request) {
       prompt: getScenarioPrompt(scenario, metrics),
       size: "1024x1536",
       quality: "medium",
+      background: "transparent",
+      output_format: "png",
     });
 
     const b64 = result.data?.[0]?.b64_json;
