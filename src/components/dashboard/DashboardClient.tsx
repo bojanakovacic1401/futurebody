@@ -15,21 +15,27 @@ import {
 } from "lucide-react";
 import { HUDCard } from "@/components/ui/HUDCard";
 import { ScoreGauge } from "@/components/ui/ScoreGauge";
-import { defaultHealthInput } from "@/lib/health/defaults";
 import { calculateHealthScores, getBodySystems } from "@/lib/health/scoring";
 import { getInterventionImpact } from "@/lib/health/interventions";
 import {
   getStoredDashboardAvatar,
-  getStoredHealthInput,
   getStoredSimulationScenario,
 } from "@/lib/health/storage";
+import { useSyncedHealthInput } from "@/lib/health/useSyncedHealthInput";
+import {
+  getRiskStatus,
+  getRiskStatusClass,
+  getStressStatus,
+  getStressStatusClass,
+  getPositiveScoreStatus,
+} from "@/lib/health/status";
+import { FloatingScanParticles, OrbitalAvatarHalo } from "@/components/fx/FutureBodyFx";
 import type { HealthInput } from "@/types/health";
 
 const assets = {
   logo: "/assets/logo-b.png",
   body: "/assets/body-hologram.png",
   bodySmall: "/assets/body-hologram-small.png",
-
   energy: "/assets/icon-energy.png",
   focus: "/assets/icon-focus.png",
   brain: "/assets/icon-brain.png",
@@ -50,26 +56,17 @@ type ScoreCardItem = {
   line: string;
 };
 
-function statusFromScore(score: number) {
-  if (score >= 85) return "Strong";
-  if (score >= 72) return "Good";
-  if (score >= 60) return "Moderate";
-  return "Watch";
-}
-
-function riskStatus(score: number) {
-  if (score <= 30) return "Low Risk";
-  if (score <= 55) return "Moderate";
-  return "Elevated";
+function positiveStatusClass(score: number) {
+  if (score >= 85) return "text-emerald-300";
+  if (score >= 70) return "text-cyan-300";
+  if (score >= 55) return "text-orange-300";
+  return "text-red-300";
 }
 
 export function DashboardClient() {
-  const [input, setInput] = useState<HealthInput>(defaultHealthInput);
+  const { input, setInput } = useSyncedHealthInput();
   const [scenarioLabel, setScenarioLabel] = useState("Baseline Active");
-  const [projectedReadiness, setProjectedReadiness] = useState<number | null>(
-    null
-  );
-
+  const [projectedReadiness, setProjectedReadiness] = useState<number | null>(null);
   const [dashboardAvatarUrl, setDashboardAvatarUrl] = useState("");
   const [dashboardAvatarScenario, setDashboardAvatarScenario] = useState("");
 
@@ -87,19 +84,13 @@ export function DashboardClient() {
       setInput(simulation.input);
       setScenarioLabel("Simulation Loaded");
 
-      const impact = getInterventionImpact(
-        simulation.input,
-        simulation.intervention
-      );
-
+      const impact = getInterventionImpact(simulation.input, simulation.intervention);
       setProjectedReadiness(impact.improved.readiness);
       return;
     }
 
-    const stored = getStoredHealthInput();
-    setInput(stored);
     setScenarioLabel("Baseline Active");
-  }, []);
+  }, [setInput]);
 
   const scores = useMemo(() => calculateHealthScores(input), [input]);
   const systems = useMemo(() => getBodySystems(input), [input]);
@@ -109,80 +100,72 @@ export function DashboardClient() {
       label: "Energy Score",
       value: String(scores.energy),
       unit: "/100",
-      status: statusFromScore(scores.energy),
+      status: getPositiveScoreStatus(scores.energy),
       icon: assets.energy,
-      statusClass: "text-emerald-300",
+      statusClass: positiveStatusClass(scores.energy),
       line: "0,19 18,18 36,18 54,14 72,16 90,11 108,14 126,8",
     },
     {
       label: "Focus Score",
       value: String(scores.focus),
       unit: "/100",
-      status: statusFromScore(scores.focus),
+      status: getPositiveScoreStatus(scores.focus),
       icon: assets.focus,
-      statusClass: "text-cyan-300",
+      statusClass: positiveStatusClass(scores.focus),
       line: "0,18 18,16 36,15 54,16 72,12 90,13 108,10 126,11",
     },
     {
       label: "Burnout Risk",
       value: String(scores.burnoutRisk),
       unit: "/100",
-      status: riskStatus(scores.burnoutRisk),
+      status: getRiskStatus(scores.burnoutRisk),
       icon: assets.brain,
-      statusClass:
-        scores.burnoutRisk <= 35 ? "text-emerald-300" : "text-orange-300",
+      statusClass: getRiskStatusClass(scores.burnoutRisk),
       line: "0,8 18,8 36,12 54,12 72,16 90,15 108,18 126,18",
     },
     {
       label: "Metabolic Score",
       value: String(scores.metabolic),
       unit: "/100",
-      status: statusFromScore(scores.metabolic),
+      status: getPositiveScoreStatus(scores.metabolic),
       icon: assets.metabolic,
-      statusClass: "text-orange-300",
+      statusClass: positiveStatusClass(scores.metabolic),
       line: "0,18 18,16 36,17 54,13 72,15 90,9 108,13 126,10",
     },
     {
       label: "Recovery Score",
       value: String(scores.recovery),
       unit: "/100",
-      status: statusFromScore(scores.recovery),
+      status: getPositiveScoreStatus(scores.recovery),
       icon: assets.recovery,
-      statusClass: "text-emerald-300",
+      statusClass: positiveStatusClass(scores.recovery),
       line: "0,20 18,19 36,17 54,17 72,12 90,13 108,9 126,10",
     },
     {
       label: "Sleep Debt",
       value: String(scores.sleepDebt),
       unit: "hrs",
-      status: scores.sleepDebt <= 1.5 ? "Minor" : "High",
+      status: scores.sleepDebt <= 1.5 ? "MINOR" : "HIGH",
       icon: assets.sleep,
-      statusClass:
-        scores.sleepDebt <= 1.5 ? "text-violet-300" : "text-orange-300",
+      statusClass: scores.sleepDebt <= 1.5 ? "text-violet-300" : "text-orange-300",
       line: "0,21 18,19 36,20 54,17 72,22 90,10 108,23 126,15",
     },
     {
       label: "Stress Load",
       value: String(input.stress),
       unit: "/100",
-      status:
-        input.stress <= 45
-          ? "Low"
-          : input.stress <= 65
-            ? "Moderate"
-            : "High",
+      status: getStressStatus(input.stress),
       icon: assets.stress,
-      statusClass: input.stress <= 45 ? "text-emerald-300" : "text-orange-300",
+      statusClass: getStressStatusClass(input.stress),
       line: "0,21 18,20 36,22 54,16 72,18 90,12 108,20 126,15",
     },
     {
       label: "Inflammation",
       value: String(scores.inflammation),
       unit: "est.",
-      status: scores.inflammation <= 2.2 ? "Low" : "Watch",
+      status: scores.inflammation <= 2.2 ? "LOW" : "WATCH",
       icon: assets.inflammation,
-      statusClass:
-        scores.inflammation <= 2.2 ? "text-emerald-300" : "text-orange-300",
+      statusClass: scores.inflammation <= 2.2 ? "text-emerald-300" : "text-orange-300",
       line: "0,21 18,20 36,17 54,19 72,10 90,16 108,15 126,17",
     },
   ];
@@ -237,6 +220,8 @@ export function DashboardClient() {
 
             <div className="relative min-h-[880px] min-w-0 overflow-hidden rounded-[26px] border border-cyan-300/10 bg-slate-950/25">
               <ScanNoise />
+              <FloatingScanParticles count={62} className="z-[18] opacity-70" />
+              <OrbitalAvatarHalo className="z-[8]" />
 
               <div className="absolute left-6 top-6 z-20">
                 <h1 className="text-3xl font-bold uppercase tracking-[0.18em] text-white">
@@ -257,46 +242,36 @@ export function DashboardClient() {
                 </div>
               ) : null}
 
-              <FloatingTelemetry
-                hrv={Math.max(45, 100 - input.stress)}
-                temp="36.7"
-                readiness={scores.readiness}
-              />
+              <FloatingTelemetry hrv={Math.max(45, 100 - input.stress)} temp="36.7" readiness={scores.readiness} />
 
               <div className="absolute inset-0 z-10 flex items-center justify-center">
                 <Image
-                    key={dashboardAvatarUrl || assets.body}
-                    src={dashboardAvatarUrl || assets.body}
-                    alt="FutureBody avatar"
-                    width={dashboardAvatarUrl ? 1024 : 1000}
-                    height={dashboardAvatarUrl ? 1536 : 1300}
-                    priority
-                    unoptimized={Boolean(dashboardAvatarUrl)}
-                    className={[
-                        "h-[880px] w-auto object-contain",
-                        dashboardAvatarUrl
-                        ? "scale-[1.02] rounded-[28px] drop-shadow-[0_0_48px_rgba(34,211,238,.55)]"
-                        : "scale-[1.16] drop-shadow-[0_0_60px_rgba(34,211,238,.98)]",
-                    ].join(" ")}
-                    />
+                  key={dashboardAvatarUrl || assets.body}
+                  src={dashboardAvatarUrl || assets.body}
+                  alt="FutureBody avatar"
+                  width={dashboardAvatarUrl ? 1024 : 1000}
+                  height={dashboardAvatarUrl ? 1536 : 1300}
+                  priority
+                  unoptimized={Boolean(dashboardAvatarUrl)}
+                  className={[
+                    "h-[880px] w-auto object-contain transition-all duration-500",
+                    dashboardAvatarUrl
+                      ? "scale-[1.02] rounded-[28px] drop-shadow-[0_0_48px_rgba(34,211,238,.55)]"
+                      : "scale-[1.16] drop-shadow-[0_0_60px_rgba(34,211,238,.98)]",
+                  ].join(" ")}
+                />
               </div>
             </div>
 
             <div className="hidden min-w-0 space-y-4 2xl:block">
               <TodayOverview input={input} />
-              <ReadinessPanel
-                readiness={scores.readiness}
-                projected={projectedReadiness}
-              />
+              <ReadinessPanel readiness={scores.readiness} projected={projectedReadiness} />
             </div>
 
             <div className="grid gap-4 2xl:hidden">
               <VitalsPanel input={input} />
               <TodayOverview input={input} />
-              <ReadinessPanel
-                readiness={scores.readiness}
-                projected={projectedReadiness}
-              />
+              <ReadinessPanel readiness={scores.readiness} projected={projectedReadiness} />
               <PhysAgePanel value={scores.biologicalAge} />
             </div>
           </div>
@@ -317,26 +292,12 @@ export function DashboardClient() {
   );
 }
 
-function ScoreCard({
-  label,
-  value,
-  unit,
-  status,
-  icon,
-  statusClass,
-  line,
-}: ScoreCardItem) {
+function ScoreCard({ label, value, unit, status, icon, statusClass, line }: ScoreCardItem) {
   return (
     <HUDCard className="group p-4">
       <div className="grid grid-cols-[64px_1fr_120px_16px] items-center gap-3">
         <div className="relative h-14 w-14">
-          <Image
-            src={icon}
-            alt=""
-            width={64}
-            height={64}
-            className="h-full w-full object-contain"
-          />
+          <Image src={icon} alt="" width={64} height={64} className="h-full w-full object-contain" />
         </div>
 
         <div>
@@ -353,10 +314,7 @@ function ScoreCard({
         </div>
 
         <Sparkline points={line} />
-
-        <div className="text-slate-500 transition group-hover:text-cyan-300">
-          ›
-        </div>
+        <div className="text-slate-500 transition group-hover:text-cyan-300">›</div>
       </div>
     </HUDCard>
   );
@@ -384,10 +342,7 @@ function VitalsPanel({ input }: { input: HealthInput }) {
 
       <div className="space-y-3">
         {vitals.map(([label, value, unit]) => (
-          <div
-            key={label}
-            className="border-b border-cyan-300/10 pb-3 last:border-0 last:pb-0"
-          >
+          <div key={label} className="border-b border-cyan-300/10 pb-3 last:border-0 last:pb-0">
             <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
               {label}
             </div>
@@ -427,10 +382,7 @@ function TodayOverview({ input }: { input: HealthInput }) {
 
       <div className="space-y-4">
         {rows.map(([label, value, unit]) => (
-          <div
-            key={label}
-            className="flex items-center justify-between border-b border-cyan-300/10 pb-3 last:border-0"
-          >
+          <div key={label} className="flex items-center justify-between border-b border-cyan-300/10 pb-3 last:border-0">
             <span className="text-[10px] uppercase tracking-[0.18em] text-slate-500">
               {label}
             </span>
@@ -444,13 +396,7 @@ function TodayOverview({ input }: { input: HealthInput }) {
   );
 }
 
-function ReadinessPanel({
-  readiness,
-  projected,
-}: {
-  readiness: number;
-  projected: number | null;
-}) {
+function ReadinessPanel({ readiness, projected }: { readiness: number; projected: number | null }) {
   return (
     <HUDCard className="p-4">
       <div className="mb-4 text-center">
@@ -472,9 +418,7 @@ function ReadinessPanel({
           <div className="text-[10px] uppercase tracking-[0.16em] text-slate-500">
             Scenario Readiness
           </div>
-          <div className="mt-1 text-2xl font-light text-cyan-300">
-            {projected}
-          </div>
+          <div className="mt-1 text-2xl font-light text-cyan-300">{projected}</div>
         </div>
       ) : null}
     </HUDCard>
@@ -505,17 +449,7 @@ function PhysAgePanel({ value }: { value: number }) {
   );
 }
 
-function BodySystemsPanel({
-  systems,
-}: {
-  systems: {
-    id: string;
-    name: string;
-    score: number;
-    status: string;
-    description: string;
-  }[];
-}) {
+function BodySystemsPanel({ systems }: { systems: { id: string; name: string; score: number; status: string; description: string }[] }) {
   const icons: Record<string, LucideIcon> = {
     cardiovascular: HeartPulse,
     neurological: Brain,
@@ -535,10 +469,7 @@ function BodySystemsPanel({
           <p className="mt-1 text-xs text-slate-500">Core system readiness</p>
         </div>
 
-        <Link
-          href="/body"
-          className="text-xs font-bold uppercase tracking-[0.16em] text-cyan-300"
-        >
+        <Link href="/body" className="text-xs font-bold uppercase tracking-[0.16em] text-cyan-300">
           View All
         </Link>
       </div>
@@ -546,35 +477,24 @@ function BodySystemsPanel({
       <div className="grid gap-2 lg:grid-cols-[1fr_170px_1fr]">
         <div className="space-y-2">
           {systems.slice(0, 3).map((system) => (
-            <SystemRow
-              key={system.id}
-              name={system.name}
-              value={`${system.score}%`}
-              status={system.status}
-              icon={icons[system.id] || Activity}
-            />
+            <SystemRow key={system.id} name={system.name} value={`${system.score}%`} status={system.status} icon={icons[system.id] || Activity} />
           ))}
         </div>
 
-        <div className="relative hidden items-center justify-center lg:flex">
+        <div className="relative hidden min-h-[285px] items-center justify-center overflow-visible lg:flex">
+          <FloatingScanParticles count={24} className="opacity-60" />
           <Image
             src={assets.bodySmall}
             alt=""
             width={220}
             height={360}
-            className="h-[285px] w-auto object-contain drop-shadow-[0_0_30px_rgba(34,211,238,.9)]"
+            className="relative z-10 h-[285px] w-auto object-contain drop-shadow-[0_0_30px_rgba(34,211,238,.9)]"
           />
         </div>
 
         <div className="space-y-2">
           {systems.slice(3).map((system) => (
-            <SystemRow
-              key={system.id}
-              name={system.name}
-              value={`${system.score}%`}
-              status={system.status}
-              icon={icons[system.id] || Activity}
-            />
+            <SystemRow key={system.id} name={system.name} value={`${system.score}%`} status={system.status} icon={icons[system.id] || Activity} />
           ))}
         </div>
       </div>
@@ -582,17 +502,7 @@ function BodySystemsPanel({
   );
 }
 
-function SystemRow({
-  name,
-  value,
-  status,
-  icon: Icon,
-}: {
-  name: string;
-  value: string;
-  status: string;
-  icon: LucideIcon;
-}) {
+function SystemRow({ name, value, status, icon: Icon }: { name: string; value: string; status: string; icon: LucideIcon }) {
   return (
     <div className="rounded-xl border border-cyan-300/10 bg-slate-950/45 p-2.5">
       <div className="flex items-center gap-3">
@@ -623,9 +533,7 @@ function InflammationPanel({ value }: { value: number }) {
         </h3>
 
         <div className="flex rounded-lg border border-cyan-300/15 bg-slate-950/50 p-1">
-          <button className="rounded-md bg-cyan-400/15 px-3 py-1 text-xs text-cyan-200">
-            7D
-          </button>
+          <button className="rounded-md bg-cyan-400/15 px-3 py-1 text-xs text-cyan-200">7D</button>
           <button className="px-3 py-1 text-xs text-slate-500">30D</button>
           <button className="px-3 py-1 text-xs text-slate-500">90D</button>
         </div>
@@ -634,23 +542,11 @@ function InflammationPanel({ value }: { value: number }) {
       <div className="relative h-44 overflow-hidden rounded-xl border border-cyan-300/10 bg-slate-950/40">
         <div className="absolute inset-0 bg-[linear-gradient(rgba(34,211,238,.05)_1px,transparent_1px),linear-gradient(90deg,rgba(34,211,238,.05)_1px,transparent_1px)] bg-[size:34px_34px]" />
 
-        <svg
-          viewBox="0 0 500 160"
-          className="absolute inset-0 h-full w-full"
-          preserveAspectRatio="none"
-        >
-          <polyline
-            points="0,105 70,95 140,75 210,90 280,96 350,98 420,100 500,108"
-            fill="none"
-            stroke="#22d3ee"
-            strokeWidth="3"
-            strokeLinecap="round"
-          />
+        <svg viewBox="0 0 500 160" className="absolute inset-0 h-full w-full" preserveAspectRatio="none">
+          <polyline points="0,105 70,95 140,75 210,90 280,96 350,98 420,100 500,108" fill="none" stroke="#22d3ee" strokeWidth="3" strokeLinecap="round" />
         </svg>
 
-        <div className="absolute right-4 top-1/2 text-2xl font-light text-cyan-300">
-          {value}
-        </div>
+        <div className="absolute right-4 top-1/2 text-2xl font-light text-cyan-300">{value}</div>
       </div>
     </HUDCard>
   );
@@ -658,24 +554,27 @@ function InflammationPanel({ value }: { value: number }) {
 
 function MiniStatusPanel({ source }: { source: string }) {
   return (
-    <HUDCard className="p-5">
-      <div className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
-        Simulation Status
+    <HUDCard className="relative overflow-hidden p-5">
+      <FloatingScanParticles count={18} className="opacity-40" />
+
+      <div className="relative z-10">
+        <div className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
+          Simulation Status
+        </div>
+        <div className="mt-3 text-sm font-bold uppercase tracking-[0.18em] text-cyan-300">
+          {source}
+        </div>
+        <div className="mt-1 text-sm text-slate-400">
+          Updated from local model
+        </div>
       </div>
-      <div className="mt-3 text-sm font-bold uppercase tracking-[0.18em] text-cyan-300">
-        {source}
-      </div>
-      <div className="mt-1 text-sm text-slate-400">Updated from local model</div>
     </HUDCard>
   );
 }
 
 function RunSimulationPanel() {
   return (
-    <Link
-      href="/simulate"
-      className="relative block overflow-hidden rounded-2xl border border-cyan-300/40 bg-cyan-400/10 p-5 text-left shadow-[0_0_28px_rgba(34,211,238,.2)]"
-    >
+    <Link href="/simulate" className="relative block overflow-hidden rounded-2xl border border-cyan-300/40 bg-cyan-400/10 p-5 text-left shadow-[0_0_28px_rgba(34,211,238,.2)]">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_50%,rgba(34,211,238,.18),transparent_30%)]" />
 
       <div className="relative flex items-center gap-6">
@@ -720,50 +619,27 @@ function MilestonePanel({ input }: { input: HealthInput }) {
 function Sparkline({ points }: { points: string }) {
   return (
     <svg viewBox="0 0 126 28" className="h-8 w-full">
-      <polyline
-        points={points}
-        fill="none"
-        stroke="#22d3ee"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
+      <polyline points={points} fill="none" stroke="#22d3ee" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
 
-function FloatingTelemetry({
-  hrv,
-  temp,
-  readiness,
-}: {
-  hrv: number;
-  temp: string;
-  readiness: number;
-}) {
+function FloatingTelemetry({ hrv, temp, readiness }: { hrv: number; temp: string; readiness: number }) {
   return (
     <>
       <div className="absolute left-8 top-[170px] z-20 hidden rounded-xl border border-cyan-300/10 bg-slate-950/35 px-4 py-3 text-cyan-300 backdrop-blur-sm 2xl:block">
-        <div className="text-[10px] uppercase tracking-[0.2em] text-slate-500">
-          Ready
-        </div>
-        <div className="mt-1 text-2xl font-light text-cyan-300">
-          {readiness}
-        </div>
+        <div className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Ready</div>
+        <div className="mt-1 text-2xl font-light text-cyan-300">{readiness}</div>
       </div>
 
       <div className="absolute right-8 top-[310px] z-20 hidden rounded-xl border border-cyan-300/10 bg-slate-950/35 px-4 py-3 text-cyan-300 backdrop-blur-sm 2xl:block">
-        <div className="text-[10px] uppercase tracking-[0.2em] text-slate-500">
-          HRV
-        </div>
+        <div className="text-[10px] uppercase tracking-[0.2em] text-slate-500">HRV</div>
         <div className="mt-1 text-2xl font-light text-cyan-300">{hrv}</div>
         <div className="text-xs text-slate-500">ms</div>
       </div>
 
       <div className="absolute right-8 top-[470px] z-20 hidden rounded-xl border border-cyan-300/10 bg-slate-950/35 px-4 py-3 text-cyan-300 backdrop-blur-sm 2xl:block">
-        <div className="text-[10px] uppercase tracking-[0.2em] text-slate-500">
-          Temp
-        </div>
+        <div className="text-[10px] uppercase tracking-[0.2em] text-slate-500">Temp</div>
         <div className="mt-1 text-2xl font-light text-cyan-300">{temp}</div>
         <div className="text-xs text-slate-500">°C</div>
       </div>
@@ -785,76 +661,14 @@ function ScanNoise() {
     <>
       <div className="absolute inset-0 bg-[linear-gradient(rgba(34,211,238,.04)_1px,transparent_1px),linear-gradient(90deg,rgba(34,211,238,.04)_1px,transparent_1px)] bg-[size:40px_40px]" />
 
-      <svg
-        className="absolute inset-0 h-full w-full opacity-50"
-        viewBox="0 0 1000 800"
-        preserveAspectRatio="none"
-      >
-        <circle
-          cx="500"
-          cy="400"
-          r="260"
-          fill="none"
-          stroke="#22d3ee"
-          strokeOpacity=".18"
-        />
-        <circle
-          cx="500"
-          cy="400"
-          r="180"
-          fill="none"
-          stroke="#22d3ee"
-          strokeOpacity=".15"
-        />
-        <circle
-          cx="500"
-          cy="400"
-          r="110"
-          fill="none"
-          stroke="#22d3ee"
-          strokeOpacity=".12"
-        />
-
-        <path
-          d="M70 120 H190 L250 180"
-          stroke="#22d3ee"
-          strokeOpacity=".22"
-          fill="none"
-        />
-        <path
-          d="M930 160 H780 L710 230"
-          stroke="#22d3ee"
-          strokeOpacity=".22"
-          fill="none"
-        />
-        <path
-          d="M80 610 H230 L310 540"
-          stroke="#22d3ee"
-          strokeOpacity=".22"
-          fill="none"
-        />
-        <path
-          d="M940 620 H760 L690 560"
-          stroke="#22d3ee"
-          strokeOpacity=".22"
-          fill="none"
-        />
-
-        {Array.from({ length: 28 }).map((_, index) => {
-          const x = 80 + ((index * 73) % 850);
-          const y = 90 + ((index * 127) % 640);
-
-          return (
-            <circle
-              key={index}
-              cx={x}
-              cy={y}
-              r={index % 3 === 0 ? 3 : 1.5}
-              fill="#22d3ee"
-              opacity={index % 4 === 0 ? ".75" : ".35"}
-            />
-          );
-        })}
+      <svg className="absolute inset-0 h-full w-full opacity-50" viewBox="0 0 1000 800" preserveAspectRatio="none">
+        <circle cx="500" cy="400" r="260" fill="none" stroke="#22d3ee" strokeOpacity=".18" />
+        <circle cx="500" cy="400" r="180" fill="none" stroke="#22d3ee" strokeOpacity=".15" />
+        <circle cx="500" cy="400" r="110" fill="none" stroke="#22d3ee" strokeOpacity=".12" />
+        <path d="M70 120 H190 L250 180" stroke="#22d3ee" strokeOpacity=".22" fill="none" />
+        <path d="M930 160 H780 L710 230" stroke="#22d3ee" strokeOpacity=".22" fill="none" />
+        <path d="M80 610 H230 L310 540" stroke="#22d3ee" strokeOpacity=".22" fill="none" />
+        <path d="M940 620 H760 L690 560" stroke="#22d3ee" strokeOpacity=".22" fill="none" />
       </svg>
 
       <div className="absolute bottom-0 left-1/2 h-28 w-[70%] -translate-x-1/2 rounded-full border border-cyan-300/20 bg-cyan-400/5 blur-[1px]" />

@@ -6,6 +6,8 @@ const HEALTH_STORAGE_KEY = "futurebody_health_input";
 const SIMULATION_STORAGE_KEY = "futurebody_last_simulation";
 const DASHBOARD_AVATAR_KEY = "futurebody_dashboard_avatar";
 
+export const HEALTH_INPUT_UPDATED_EVENT = "futurebody:health-input-updated";
+
 export type StoredSimulationScenario = {
   input: HealthInput;
   intervention: InterventionInput;
@@ -17,6 +19,16 @@ export type StoredDashboardAvatar = {
   scenario: "baseline" | "improved" | "risk";
   savedAt: string;
 };
+
+function notifyHealthInputUpdated(input: HealthInput) {
+  if (typeof window === "undefined") return;
+
+  window.dispatchEvent(
+    new CustomEvent(HEALTH_INPUT_UPDATED_EVENT, {
+      detail: input,
+    })
+  );
+}
 
 export function getStoredHealthInput(): HealthInput {
   if (typeof window === "undefined") {
@@ -41,7 +53,9 @@ export function saveStoredHealthInput(input: HealthInput) {
     return;
   }
 
-  window.localStorage.setItem(HEALTH_STORAGE_KEY, JSON.stringify(input));
+  const normalized = normalizeHealthInput(input);
+  window.localStorage.setItem(HEALTH_STORAGE_KEY, JSON.stringify(normalized));
+  notifyHealthInputUpdated(normalized);
 }
 
 export function resetStoredHealthInput() {
@@ -50,6 +64,7 @@ export function resetStoredHealthInput() {
   }
 
   window.localStorage.removeItem(HEALTH_STORAGE_KEY);
+  notifyHealthInputUpdated(defaultHealthInput);
 }
 
 export function saveStoredSimulationScenario(
@@ -61,7 +76,7 @@ export function saveStoredSimulationScenario(
   }
 
   const scenario: StoredSimulationScenario = {
-    input,
+    input: normalizeHealthInput(input),
     intervention,
     savedAt: new Date().toISOString(),
   };

@@ -217,31 +217,11 @@ export async function POST(request: Request) {
       );
     }
 
-    if (!process.env.OPENAI_API_KEY) {
-      return NextResponse.json(
-        {
-          ok: false,
-          message: "Missing OPENAI_API_KEY in .env.local.",
-        },
-        { status: 500 }
-      );
-    }
-
     const body = await request.json();
 
     const imageUrl = String(body.imageUrl || "");
     const scenario = String(body.scenario || "baseline") as Scenario;
     const metrics = normalizeMetrics(body.metrics);
-
-if (process.env.USE_MOCK_AI === "true") {
-  return NextResponse.json({
-    ok: true,
-    scenario,
-    imageUrl,
-    message:
-      "Mock AI mode active. Returning uploaded image without using OpenAI credits.",
-  });
-}
 
     if (!imageUrl) {
       return NextResponse.json(
@@ -250,6 +230,26 @@ if (process.env.USE_MOCK_AI === "true") {
           message: "Upload a face image first.",
         },
         { status: 400 }
+      );
+    }
+
+    if (process.env.USE_MOCK_AI === "true") {
+      return NextResponse.json({
+        ok: true,
+        scenario,
+        imageUrl,
+        message:
+          "Mock AI mode active. Returning uploaded image without using OpenAI credits.",
+      });
+    }
+
+    if (!process.env.OPENAI_API_KEY) {
+      return NextResponse.json(
+        {
+          ok: false,
+          message: "Missing OPENAI_API_KEY in .env.local.",
+        },
+        { status: 500 }
       );
     }
 
@@ -318,7 +318,8 @@ if (process.env.USE_MOCK_AI === "true") {
     return NextResponse.json(
       {
         ok: false,
-        message: "Avatar generation failed. Check terminal for OpenAI/API error.",
+        message:
+          "Avatar generation failed. Check terminal for OpenAI/API error.",
       },
       { status: 500 }
     );

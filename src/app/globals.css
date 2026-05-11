@@ -2,7 +2,7 @@
 
 html,
 body {
-   max-width: 100%;
+  max-width: 100%;
   overflow-x: hidden;
   background: #020712;
 }
@@ -12,8 +12,8 @@ body {
 }
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #020712;
+  --foreground: #ededed;
 }
 
 @theme inline {
@@ -23,20 +23,14 @@ body {
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
 
-.future-slider {
+.future-slider,
+.futurebody-range {
   --progress: 50%;
   width: 100%;
   height: 32px;
@@ -44,9 +38,11 @@ body {
   -webkit-appearance: none;
   background: transparent;
   cursor: pointer;
+  outline: none;
 }
 
-.future-slider::-webkit-slider-runnable-track {
+.future-slider::-webkit-slider-runnable-track,
+.futurebody-range::-webkit-slider-runnable-track {
   height: 6px;
   border-radius: 9999px;
   background: linear-gradient(
@@ -59,36 +55,216 @@ body {
   box-shadow: 0 0 14px rgba(34, 211, 238, 0.35);
 }
 
-.future-slider::-webkit-slider-thumb {
+.future-slider::-webkit-slider-thumb,
+.futurebody-range::-webkit-slider-thumb {
   appearance: none;
   -webkit-appearance: none;
-  width: 22px;
-  height: 22px;
-  margin-top: -8px;
+  width: 18px;
+  height: 18px;
+  margin-top: -6px;
   border-radius: 9999px;
   border: 2px solid #cffafe;
   background: #67e8f9;
   box-shadow: 0 0 18px rgba(34, 211, 238, 0.95);
 }
 
-.future-slider::-moz-range-track {
+.future-slider::-moz-range-track,
+.futurebody-range::-moz-range-track {
   height: 6px;
   border-radius: 9999px;
   background: #1e293b;
 }
 
-.future-slider::-moz-range-progress {
+.future-slider::-moz-range-progress,
+.futurebody-range::-moz-range-progress {
   height: 6px;
   border-radius: 9999px;
   background: #67e8f9;
   box-shadow: 0 0 14px rgba(34, 211, 238, 0.35);
 }
 
-.future-slider::-moz-range-thumb {
-  width: 22px;
-  height: 22px;
+.future-slider::-moz-range-thumb,
+.futurebody-range::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
   border-radius: 9999px;
   border: 2px solid #cffafe;
   background: #67e8f9;
   box-shadow: 0 0 18px rgba(34, 211, 238, 0.95);
+  cursor: pointer;
+}
+
+.futurebody-live-molecule {
+  animation: futurebodyMoleculeFloat 7s ease-in-out infinite;
+  will-change: transform;
+}
+
+.futurebody-molecule-spin,
+.futurebody-slow-rotate,
+.futurebody-dna-float,
+.futurebody-orbital-halo {
+  transform-box: fill-box;
+  transform-origin: center;
+  will-change: transform;
+}
+
+.futurebody-molecule-spin {
+  animation: futurebodyMoleculeSpin 12s linear infinite;
+}
+
+.futurebody-slow-rotate {
+  animation: futurebodySlowRotate 14s linear infinite;
+}
+
+.futurebody-molecule-node,
+.futurebody-particle-pulse,
+.futurebody-dna-step {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: futurebodyMoleculePulse 2.4s ease-in-out infinite;
+}
+
+.futurebody-dna-float {
+  animation: futurebodyDnaFloat 5.5s ease-in-out infinite;
+}
+
+.futurebody-floating-particle {
+  animation-name: futurebodyParticleFloat;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+  will-change: transform;
+}
+
+.futurebody-heart-pulse {
+  animation: futurebodyHeartPulse 1.35s ease-in-out infinite;
+  will-change: transform;
+}
+
+.futurebody-heart-shape {
+  filter: drop-shadow(0 0 12px rgba(244, 114, 182, 0.85));
+}
+
+.futurebody-orbital-halo {
+  animation: futurebodyHaloRotate 22s linear infinite;
+}
+
+.futurebody-asset-float {
+  animation: futurebodyAssetFloat 6s ease-in-out infinite;
+}
+
+.futurebody-asset-pulse {
+  animation: futurebodyAssetPulse 2.4s ease-in-out infinite;
+}
+
+.futurebody-asset-slow {
+  animation: futurebodyAssetSlow 12s ease-in-out infinite;
+}
+
+@keyframes futurebodyMoleculeFloat {
+  0%, 100% {
+    transform: translateY(0) scale(1);
+  }
+  50% {
+    transform: translateY(-10px) scale(1.035);
+  }
+}
+
+@keyframes futurebodyMoleculeSpin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes futurebodySlowRotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes futurebodyMoleculePulse {
+  0%, 100% {
+    opacity: 0.65;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.18);
+  }
+}
+
+@keyframes futurebodyDnaFloat {
+  0%, 100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-10px) rotate(2deg);
+  }
+}
+
+@keyframes futurebodyParticleFloat {
+  0%, 100% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(14px, -22px, 0);
+  }
+}
+
+@keyframes futurebodyHeartPulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.8;
+  }
+  45% {
+    transform: scale(1.14);
+    opacity: 1;
+  }
+}
+
+@keyframes futurebodyHaloRotate {
+  from {
+    transform: rotate(0deg) scale(1);
+    opacity: 0.55;
+  }
+  to {
+    transform: rotate(360deg) scale(1.03);
+    opacity: 0.85;
+  }
+}
+
+@keyframes futurebodyAssetFloat {
+  0%, 100% {
+    transform: translateY(0) scale(1);
+    opacity: 0.78;
+  }
+  50% {
+    transform: translateY(-12px) scale(1.04);
+    opacity: 1;
+  }
+}
+
+@keyframes futurebodyAssetPulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.78;
+  }
+  50% {
+    transform: scale(1.08);
+    opacity: 1;
+  }
+}
+
+@keyframes futurebodyAssetSlow {
+  0%, 100% {
+    transform: translateY(0) rotate(-1deg);
+  }
+  50% {
+    transform: translateY(-8px) rotate(1deg);
+  }
 }

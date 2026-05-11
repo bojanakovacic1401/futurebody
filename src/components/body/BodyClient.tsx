@@ -11,18 +11,31 @@ import {
   Flame,
   HeartPulse,
   ShieldPlus,
-  Waves,
+  Sparkles,
+  Target,
   Zap,
 } from "lucide-react";
 import { HUDCard } from "@/components/ui/HUDCard";
 import { ScoreGauge } from "@/components/ui/ScoreGauge";
-import { defaultHealthInput } from "@/lib/health/defaults";
 import { calculateHealthScores, getBodySystems } from "@/lib/health/scoring";
-import {
-  getStoredHealthInput,
-  getStoredSimulationScenario,
-} from "@/lib/health/storage";
-import type { BodySystemScore, HealthInput } from "@/types/health";
+import { getStoredDashboardAvatar } from "@/lib/health/storage";
+import { useSyncedHealthInput } from "@/lib/health/useSyncedHealthInput";
+import { AnimatedAsset } from "@/components/fx/AnimatedAsset";
+import { FloatingScanParticles, OrbitalAvatarHalo } from "@/components/fx/FutureBodyFx";
+import type { HealthInput } from "@/types/health";
+
+const assets = {
+  body: "/assets/body-hologram.png",
+  brain: "/assets/brain.png",
+};
+
+type BodySystem = {
+  id: string;
+  name: string;
+  score: number;
+  status: string;
+  description: string;
+};
 
 const systemIcons: Record<string, LucideIcon> = {
   cardiovascular: HeartPulse,
@@ -33,207 +46,276 @@ const systemIcons: Record<string, LucideIcon> = {
   metabolic: Flame,
 };
 
-const systemPositions: Record<string, string> = {
-  cardiovascular: "left-[16%] top-[28%]",
-  neurological: "right-[16%] top-[18%]",
-  respiratory: "left-[14%] top-[43%]",
-  digestive: "right-[15%] top-[48%]",
-  immune: "left-[17%] top-[64%]",
-  metabolic: "right-[15%] top-[66%]",
+const fallbackDescriptions: Record<string, string> = {
+  cardiovascular: "Movement, cardio, recovery and metabolic pressure.",
+  neurological: "Focus, stress load, sleep quality and cognitive recovery.",
+  respiratory: "Cardio minutes, daily movement and recovery breathing proxy.",
+  digestive: "Nutrition quality, alcohol load and inflammation proxy.",
+  immune: "Sleep, stress, recovery and lifestyle inflammation estimate.",
+  metabolic: "Body composition, diet, activity and alcohol pattern.",
 };
 
+function getStatusClass(score: number) {
+  if (score >= 80) return "text-emerald-300";
+  if (score >= 65) return "text-cyan-300";
+  if (score >= 50) return "text-orange-300";
+  return "text-red-300";
+}
+
+function getStatusLabel(score: number) {
+  if (score >= 80) return "Optimal";
+  if (score >= 65) return "Good";
+  if (score >= 50) return "Needs Work";
+  return "Attention";
+}
+
+function getBestMove(input: HealthInput) {
+  if (input.sleep < 7) return "Improve Sleep";
+  if (input.steps < 8000) return "Increase Steps";
+  if (input.stress > 55) return "Reduce Stress";
+  if (input.diet < 70) return "Improve Nutrition";
+  return "Maintain Momentum";
+}
+
 export function BodyClient() {
-  const [input, setInput] = useState<HealthInput>(defaultHealthInput);
-  const [source, setSource] = useState("Baseline Active");
+  const { input } = useSyncedHealthInput();
+  const [avatarUrl, setAvatarUrl] = useState("");
 
   useEffect(() => {
-    const scenario = getStoredSimulationScenario();
+    const avatar = getStoredDashboardAvatar();
 
-    if (scenario) {
-      setInput(scenario.input);
-      setSource("Simulation Loaded");
-      return;
+    if (avatar?.imageUrl) {
+      setAvatarUrl(avatar.imageUrl);
     }
-
-    setInput(getStoredHealthInput());
-    setSource("Baseline Active");
   }, []);
 
   const scores = useMemo(() => calculateHealthScores(input), [input]);
-  const systems = useMemo(() => getBodySystems(input), [input]);
+  const systems = useMemo(() => getBodySystems(input).slice(0, 6), [input]);
 
-  const averageSystemScore = Math.round(
-    systems.reduce((sum, system) => sum + system.score, 0) / systems.length
+  const overallScore = Math.round(
+    systems.reduce((sum, item) => sum + item.score, 0) / Math.max(systems.length, 1)
   );
 
-  return (
-    <main className="w-full overflow-x-hidden px-4 py-5 md:px-6">
-      <div className="mx-auto w-full max-w-[1600px] space-y-5">
-        <section className="relative overflow-hidden rounded-[28px] border border-cyan-300/15 bg-slate-950/35 p-6">
-          <ScanBackground />
+  const highest = [...systems].sort((a, b) => b.score - a.score)[0];
+  const lowest = [...systems].sort((a, b) => a.score - b.score)[0];
 
-          <div className="relative z-10 flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
-            <div>
-              <div className="mb-3 inline-flex rounded-full border border-cyan-300/20 bg-cyan-400/10 px-4 py-2 text-xs font-bold uppercase tracking-[0.18em] text-cyan-300">
-                {source}
+  return (
+    <main className="w-full overflow-x-hidden px-4 py-3 xl:h-[calc(100vh-72px)] xl:overflow-hidden">
+      <section className="mx-auto grid h-full w-full max-w-[1760px] gap-3 xl:grid-cols-[310px_minmax(0,1fr)_420px] xl:grid-rows-[88px_minmax(0,1fr)_96px]">
+        <HUDCard className="xl:col-span-3">
+          <div className="relative flex h-full items-center justify-between overflow-hidden rounded-[inherit] px-6">
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_25%_50%,rgba(34,211,238,.16),transparent_42%)]" />
+
+            <div className="relative">
+              <div className="mb-2 inline-flex rounded-full border border-cyan-300/25 bg-cyan-400/10 px-4 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-cyan-300">
+                Simulation Loaded
               </div>
 
-              <h1 className="text-3xl font-bold uppercase tracking-[0.18em] text-white">
+              <h1 className="text-2xl font-bold uppercase tracking-[0.28em] text-white md:text-3xl">
                 Body Systems
               </h1>
 
-              <p className="mt-2 max-w-3xl text-slate-400">
+              <p className="mt-2 text-sm text-slate-400">
                 System-by-system view of your current body simulation.
               </p>
             </div>
 
             <Link
               href="/simulate"
-              className="flex h-12 w-fit items-center rounded-xl border border-cyan-300/30 bg-cyan-400/10 px-5 text-sm font-bold uppercase tracking-[0.16em] text-cyan-200"
+              className="relative hidden rounded-xl border border-cyan-300/30 bg-cyan-400/10 px-6 py-3 text-xs font-bold uppercase tracking-[0.16em] text-cyan-200 transition hover:bg-cyan-400/15 md:block"
             >
               Adjust Simulation
             </Link>
           </div>
-        </section>
+        </HUDCard>
 
-        <div className="grid gap-5 xl:grid-cols-[1fr_430px]">
-          <section className="relative min-h-[820px] overflow-hidden rounded-[28px] border border-cyan-300/15 bg-slate-950/35">
-            <ScanBackground />
-
-            <div className="absolute inset-0 z-10 flex items-center justify-center">
-              <Image
-                src="/assets/body-hologram.png"
-                alt="FutureBody body scan"
-                width={1000}
-                height={1300}
-                priority
-                className="h-[820px] w-auto scale-110 object-contain drop-shadow-[0_0_65px_rgba(34,211,238,.95)]"
-              />
+        <div className="min-h-0 space-y-3 xl:h-full xl:overflow-hidden">
+          <HUDCard className="p-5 xl:h-[38%]">
+            <div className="text-[10px] font-bold uppercase tracking-[0.24em] text-slate-500">
+              Overall System Score
             </div>
 
-            <div className="absolute left-6 top-6 z-20 rounded-2xl border border-cyan-300/10 bg-slate-950/55 p-5 backdrop-blur">
-              <div className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
-                Overall System Score
+            <div className="mt-4 flex justify-center">
+              <ScoreGauge value={overallScore} size="lg" tone="cyan" />
+            </div>
+
+            <div className="mt-3 text-center">
+              <div className="text-3xl font-light text-white">
+                {overallScore}
+                <span className="text-sm text-slate-500">/100</span>
               </div>
 
-              <div className="mt-4 flex justify-center">
-                <ScoreGauge value={averageSystemScore} size="lg" tone="cyan" />
+              <div className={`mt-1 text-xs font-bold uppercase tracking-[0.18em] ${getStatusClass(overallScore)}`}>
+                {getStatusLabel(overallScore)}
               </div>
+            </div>
+          </HUDCard>
 
-              <div className="mt-4 text-center">
-                <div className="text-3xl font-light text-white">
-                  {averageSystemScore}
-                  <span className="text-sm text-slate-500">/100</span>
+          <HUDCard className="p-5 xl:h-[23%]">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <div className="text-[10px] font-bold uppercase tracking-[0.24em] text-slate-500">
+                  Readiness
                 </div>
-                <div className="mt-1 text-xs font-bold uppercase tracking-[0.16em] text-emerald-300">
-                  {averageSystemScore >= 80
-                    ? "Strong"
-                    : averageSystemScore >= 65
-                      ? "Stable"
-                      : "Needs Attention"}
+                <div className="mt-3 text-5xl font-light text-cyan-200">
+                  {scores.readiness}
+                </div>
+                <div className="mt-1 text-xs text-slate-500">
+                  Current health state
                 </div>
               </div>
-            </div>
 
-            <div className="absolute right-6 top-6 z-20 rounded-2xl border border-cyan-300/10 bg-slate-950/55 p-5 backdrop-blur">
-              <div className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
-                Readiness
-              </div>
-              <div className="mt-2 text-4xl font-light text-cyan-300">
-                {scores.readiness}
-              </div>
-              <div className="mt-1 text-xs text-slate-500">
-                Current health state
+              <div className="rounded-2xl border border-cyan-300/15 bg-cyan-400/10 p-4 text-cyan-300">
+                <Sparkles size={34} />
               </div>
             </div>
+          </HUDCard>
 
-            {systems.map((system) => (
-              <SystemHotspot key={system.id} system={system} />
-            ))}
-
-            <div className="absolute bottom-6 left-6 right-6 z-20 grid gap-3 md:grid-cols-3">
-              <MiniSignal
-                title="Sleep Debt"
-                value={`${scores.sleepDebt}h`}
-                status={scores.sleepDebt <= 1.5 ? "Minor" : "Elevated"}
-              />
-              <MiniSignal
-                title="Inflammation"
-                value={`${scores.inflammation}`}
-                status={scores.inflammation <= 2.2 ? "Low" : "Watch"}
-              />
-              <MiniSignal
-                title="Burnout Risk"
-                value={`${scores.burnoutRisk}`}
-                status={scores.burnoutRisk <= 35 ? "Low" : "Moderate"}
-              />
+          <HUDCard className="p-5 xl:h-[39%]">
+            <div className="grid h-full grid-cols-2 gap-3">
+              <MiniMetric label="Sleep Debt" value={`${scores.sleepDebt}h`} />
+              <MiniMetric label="Inflammation" value={`${scores.inflammation}`} />
+              <MiniMetric label="Burnout Risk" value={`${scores.burnoutRisk}`} />
+              <MiniMetric label="Metabolic" value={`${scores.metabolic}`} />
             </div>
-          </section>
-
-          <aside className="space-y-4">
-            {systems.map((system) => (
-              <BodySystemCard key={system.id} system={system} input={input} />
-            ))}
-          </aside>
+          </HUDCard>
         </div>
 
-        <section className="grid gap-5 xl:grid-cols-3">
-          <InsightCard
-            icon={Zap}
-            title="Highest Strength"
-            value={getStrongestSystem(systems).name}
-            text={`Your strongest current body system is ${getStrongestSystem(
-              systems
-            ).name.toLowerCase()}, with a score of ${
-              getStrongestSystem(systems).score
-            }/100.`}
-          />
+        <BodyScanPanel systems={systems} avatarUrl={avatarUrl} />
 
-          <InsightCard
-            icon={Waves}
-            title="Main Pressure"
-            value={getWeakestSystem(systems).name}
-            text={`The model sees the most room for improvement in ${getWeakestSystem(
-              systems
-            ).name.toLowerCase()}. This is not a diagnosis, only a lifestyle simulation signal.`}
-          />
+        <div className="grid min-h-0 gap-2 xl:h-full xl:grid-rows-6 xl:overflow-hidden">
+          {systems.map((system) => (
+            <SystemDetailCard key={system.id} system={system} input={input} />
+          ))}
+        </div>
 
-          <InsightCard
-            icon={ShieldPlus}
-            title="Best Next Move"
-            value={getNextMove(input)}
-            text="This action has the highest projected leverage based on your current input pattern."
-          />
-        </section>
-      </div>
+        <InsightCard
+          icon={Zap}
+          label="Highest Strength"
+          title={highest?.name || "Metabolic"}
+          body={`Your strongest current body system is ${highest?.name || "metabolic"}, with a score of ${highest?.score || overallScore}/100.`}
+        />
+
+        <InsightCard
+          icon={Activity}
+          label="Main Pressure"
+          title={lowest?.name || "Neurological"}
+          body={`The model sees the most room for improvement in ${lowest?.name || "neurological"}. This is a lifestyle simulation signal, not a diagnosis.`}
+        />
+
+        <InsightCard
+          icon={Target}
+          label="Best Next Move"
+          title={getBestMove(input)}
+          body="This action has the highest projected leverage based on your current input pattern."
+        />
+      </section>
     </main>
   );
 }
 
-function BodySystemCard({
+function BodyScanPanel({
+  systems,
+  avatarUrl,
+}: {
+  systems: BodySystem[];
+  avatarUrl: string;
+}) {
+  const byId = Object.fromEntries(systems.map((system) => [system.id, system]));
+
+  return (
+    <HUDCard className="relative min-h-[560px] overflow-hidden xl:h-full xl:min-h-0">
+      <div className="absolute inset-0 bg-[linear-gradient(rgba(34,211,238,.04)_1px,transparent_1px),linear-gradient(90deg,rgba(34,211,238,.04)_1px,transparent_1px)] bg-[size:42px_42px]" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_48%,rgba(34,211,238,.22),transparent_42%)]" />
+      <FloatingScanParticles count={52} className="opacity-60" />
+      <OrbitalAvatarHalo />
+
+      <svg
+        className="absolute inset-0 h-full w-full opacity-45"
+        viewBox="0 0 900 760"
+        preserveAspectRatio="none"
+      >
+        <circle cx="450" cy="370" r="250" fill="none" stroke="#22d3ee" strokeOpacity=".17" />
+        <circle cx="450" cy="370" r="180" fill="none" stroke="#22d3ee" strokeOpacity=".12" />
+        <circle cx="450" cy="370" r="105" fill="none" stroke="#22d3ee" strokeOpacity=".1" />
+        <path d="M80 130 H230 L295 210" stroke="#22d3ee" strokeOpacity=".2" />
+        <path d="M820 130 H670 L600 210" stroke="#22d3ee" strokeOpacity=".2" />
+        <path d="M90 600 H245 L320 525" stroke="#22d3ee" strokeOpacity=".18" />
+        <path d="M810 600 H650 L580 525" stroke="#22d3ee" strokeOpacity=".18" />
+      </svg>
+
+      <FloatingSystem className="left-[8%] top-[18%]" label="Cardiovascular" value={byId.cardiovascular?.score || 0} />
+      <FloatingSystem className="right-[8%] top-[22%]" label="Neurological" value={byId.neurological?.score || 0} />
+      <FloatingSystem className="left-[7%] top-[52%]" label="Respiratory" value={byId.respiratory?.score || 0} />
+      <FloatingSystem className="right-[8%] top-[50%]" label="Digestive" value={byId.digestive?.score || 0} />
+      <FloatingSystem className="left-[13%] bottom-[18%]" label="Immune" value={byId.immune?.score || 0} />
+      <FloatingSystem className="right-[10%] bottom-[18%]" label="Metabolic" value={byId.metabolic?.score || 0} />
+
+      <div className="absolute inset-x-8 bottom-2 top-12 z-10 flex items-center justify-center">
+        {avatarUrl ? (
+          <img
+            src={avatarUrl}
+            alt="FutureBody avatar"
+            className="h-full max-h-full w-auto max-w-[72%] rounded-[28px] object-contain drop-shadow-[0_0_55px_rgba(34,211,238,.45)]"
+          />
+        ) : (
+          <Image
+            src={assets.body}
+            alt="FutureBody body scan"
+            width={1000}
+            height={1300}
+            priority
+            className="h-full max-h-full w-auto max-w-[82%] scale-[1.12] object-contain drop-shadow-[0_0_70px_rgba(34,211,238,.9)]"
+          />
+        )}
+      </div>
+    </HUDCard>
+  );
+}
+
+function FloatingSystem({
+  label,
+  value,
+  className,
+}: {
+  label: string;
+  value: number;
+  className: string;
+}) {
+  return (
+    <div className={`absolute z-30 hidden rounded-xl border border-cyan-300/15 bg-slate-950/55 px-4 py-3 backdrop-blur xl:block ${className}`}>
+      <div className="text-[9px] font-bold uppercase tracking-[0.22em] text-slate-500">
+        {label}
+      </div>
+      <div className="mt-1 text-2xl font-light text-cyan-200">{value}</div>
+    </div>
+  );
+}
+
+function SystemDetailCard({
   system,
   input,
 }: {
-  system: BodySystemScore;
+  system: BodySystem;
   input: HealthInput;
 }) {
   const Icon = systemIcons[system.id] || Activity;
 
   return (
     <HUDCard className="p-4">
-      <div className="flex gap-4">
-        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-cyan-300/20 bg-cyan-400/10 text-cyan-300">
-          <Icon size={24} />
+      <div className="flex h-full items-center gap-4">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-cyan-300/20 bg-cyan-400/10 text-cyan-300">
+          <Icon size={22} />
         </div>
 
         <div className="min-w-0 flex-1">
-          <div className="flex items-start justify-between gap-3">
+          <div className="flex items-start justify-between gap-4">
             <div>
-              <h2 className="font-bold uppercase tracking-[0.16em] text-white">
+              <h3 className="text-sm font-bold uppercase tracking-[0.24em] text-white">
                 {system.name}
-              </h2>
-              <div className="mt-1 text-xs font-bold uppercase text-emerald-300">
-                {system.status}
+              </h3>
+              <div className={`mt-1 text-[10px] font-bold uppercase tracking-[0.14em] ${getStatusClass(system.score)}`}>
+                {system.status || getStatusLabel(system.score)}
               </div>
             </div>
 
@@ -243,18 +325,18 @@ function BodySystemCard({
             </div>
           </div>
 
-          <p className="mt-3 text-sm leading-6 text-slate-400">
-            {system.description}
+          <p className="mt-2 truncate text-sm text-slate-400">
+            {system.description || fallbackDescriptions[system.id] || "Body system readiness estimate."}
           </p>
 
-          <p className="mt-2 text-sm leading-6 text-slate-500">
-            {getSystemExplanation(system.id, input, system.score)}
+          <p className="mt-1 truncate text-xs text-slate-500">
+            Based on sleep {input.sleep}h, stress {input.stress}/100, steps {input.steps.toLocaleString()} and diet quality {input.diet}/100.
           </p>
 
-          <div className="mt-4 h-1.5 rounded-full bg-slate-800">
+          <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-800">
             <div
-              className="h-full rounded-full bg-cyan-300 shadow-[0_0_14px_rgba(34,211,238,.8)]"
-              style={{ width: `${system.score}%` }}
+              className="h-full rounded-full bg-cyan-300 shadow-[0_0_14px_rgba(34,211,238,.75)]"
+              style={{ width: `${Math.max(8, Math.min(100, system.score))}%` }}
             />
           </div>
         </div>
@@ -263,136 +345,63 @@ function BodySystemCard({
   );
 }
 
-function SystemHotspot({ system }: { system: BodySystemScore }) {
-  const position = systemPositions[system.id] || "left-[20%] top-[50%]";
-
+function MiniMetric({ label, value }: { label: string; value: string }) {
   return (
-    <div className={`absolute ${position} z-30 hidden xl:block`}>
-      <div className="relative">
-        <div className="absolute left-1/2 top-1/2 h-20 w-20 -translate-x-1/2 -translate-y-1/2 rounded-full bg-cyan-300/10 blur-xl" />
-
-        <div className="relative rounded-2xl border border-cyan-300/20 bg-slate-950/65 px-4 py-3 backdrop-blur">
-          <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">
-            {system.name}
-          </div>
-          <div className="mt-1 text-2xl font-light text-cyan-300">
-            {system.score}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function MiniSignal({
-  title,
-  value,
-  status,
-}: {
-  title: string;
-  value: string;
-  status: string;
-}) {
-  return (
-    <div className="rounded-2xl border border-cyan-300/10 bg-slate-950/55 p-4 backdrop-blur">
+    <div className="rounded-xl border border-cyan-300/10 bg-slate-950/45 p-3">
       <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
-        {title}
+        {label}
       </div>
       <div className="mt-2 text-2xl font-light text-white">{value}</div>
-      <div className="mt-1 text-xs font-bold uppercase tracking-[0.14em] text-cyan-300">
-        {status}
-      </div>
     </div>
   );
 }
 
 function InsightCard({
   icon: Icon,
+  label,
   title,
-  value,
-  text,
+  body,
 }: {
   icon: LucideIcon;
+  label: string;
   title: string;
-  value: string;
-  text: string;
+  body: string;
 }) {
   return (
-    <HUDCard className="p-5">
-      <div className="flex items-start gap-4">
+    <HUDCard className="overflow-hidden p-5">
+      <div className="flex h-full items-center gap-5">
         <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-cyan-300/20 bg-cyan-400/10 text-cyan-300">
-          <Icon size={24} />
+          <Icon size={22} />
         </div>
 
-        <div>
-          <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
-            {title}
+        <div className="min-w-0">
+          <div className="text-[10px] font-bold uppercase tracking-[0.22em] text-slate-500">
+            {label}
           </div>
-          <div className="mt-2 text-xl font-semibold text-white">{value}</div>
-          <p className="mt-3 text-sm leading-6 text-slate-400">{text}</p>
+          <div className="mt-2 text-xl font-bold text-white">{title}</div>
+          <p className="mt-2 line-clamp-2 text-sm leading-6 text-slate-400">{body}</p>
         </div>
       </div>
     </HUDCard>
   );
 }
 
-function getStrongestSystem(systems: BodySystemScore[]) {
-  return [...systems].sort((a, b) => b.score - a.score)[0];
-}
-
-function getWeakestSystem(systems: BodySystemScore[]) {
-  return [...systems].sort((a, b) => a.score - b.score)[0];
-}
-
-function getNextMove(input: HealthInput) {
-  if (input.sleep < 7.2) return "Improve Sleep";
-  if (input.steps < 8000) return "Increase Steps";
-  if (input.stress > 55) return "Lower Stress";
-  if (input.diet < 75) return "Improve Diet";
-  return "Maintain Momentum";
-}
-
-function getSystemExplanation(
-  systemId: string,
-  input: HealthInput,
-  score: number
-) {
-  if (systemId === "cardiovascular") {
-    return `Driven mostly by ${input.steps.toLocaleString()} daily steps, ${
-      input.cardio
-    } weekly cardio minutes and recovery pattern.`;
-  }
-
-  if (systemId === "neurological") {
-    return `Influenced by ${input.sleep.toFixed(
-      1
-    )} hours of sleep, stress score ${input.stress}/100 and focus recovery.`;
-  }
-
-  if (systemId === "respiratory") {
-    return `Estimated from cardio minutes, daily movement and recovery breathing proxy.`;
-  }
-
-  if (systemId === "digestive") {
-    return `Based on diet quality ${input.diet}/100, alcohol load and lifestyle inflammation estimate.`;
-  }
-
-  if (systemId === "immune") {
-    return `Based on sleep, stress, recovery and inflammation pressure. Current score is ${score}/100.`;
-  }
-
-  if (systemId === "metabolic") {
-    return `Reflects weight ${input.weight}kg, body fat ${input.bodyFat}%, diet quality and activity load.`;
-  }
-
-  return "Lifestyle simulation signal generated from your current input pattern.";
-}
-
-function ScanBackground() {
+export function BodyLeftBrainCard() {
   return (
-    <>
-      <div className="absolute inset-0 bg-[linear-gradient(rgba(34,211,238,.035)_1px,transparent_1px),linear-gradient(90deg,rgba(34,211,238,.035)_1px,transparent_1px)] bg-[size:42px_42px]" />
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_45%,rgba(34,211,238,.18),transparent_50%)]" />
-    </>
+    <HUDCard className="relative overflow-hidden p-6">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_60%_40%,rgba(34,211,238,.14),transparent_48%)]" />
+
+      <div className="relative z-10 flex flex-col items-center text-center">
+        <AnimatedAsset src={assets.brain} alt="Neural brain" size={210} variant="float" />
+
+        <div className="mt-4 text-xs font-bold uppercase tracking-[0.18em] text-cyan-300">
+          Neural Insight
+        </div>
+
+        <p className="mt-3 max-w-[280px] text-sm leading-6 text-slate-400">
+          “Small daily changes become visible biological patterns over time.”
+        </p>
+      </div>
+    </HUDCard>
   );
 }

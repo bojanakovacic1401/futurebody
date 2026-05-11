@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FormEvent, Suspense, useState } from "react";
 import { ArrowRight, Eye, Lock, Mail } from "lucide-react";
+import { FloatingScanParticles, OrbitalAvatarHalo } from "@/components/fx/FutureBodyFx";
 
 const assets = {
   logo: "/assets/logo-b.png",
@@ -44,10 +45,7 @@ function LoginContent() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          email,
-          password,
-        }),
+        body: JSON.stringify({ email, password }),
       });
 
       const data = await response.json();
@@ -67,13 +65,17 @@ function LoginContent() {
   }
 
   return (
-    <main className="min-h-screen overflow-hidden bg-[#020712] text-white">
+    <main className="relative min-h-screen overflow-hidden bg-[#020712] text-white">
       <div className="absolute inset-0 bg-[linear-gradient(rgba(34,211,238,.035)_1px,transparent_1px),linear-gradient(90deg,rgba(34,211,238,.035)_1px,transparent_1px)] bg-[size:42px_42px]" />
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_44%_46%,rgba(14,165,233,.16),transparent_45%)]" />
+      <FloatingScanParticles count={80} className="opacity-70" />
 
       <div className="relative z-10 grid min-h-screen grid-cols-1 gap-8 px-6 py-8 xl:grid-cols-[1.45fr_.9fr] xl:px-12">
         <section className="relative hidden min-h-[820px] overflow-hidden rounded-[32px] border border-cyan-300/10 bg-slate-950/20 p-10 xl:block">
-          <div className="absolute left-10 top-8 flex items-center gap-4">
+          <FloatingScanParticles count={70} className="opacity-70" />
+          <OrbitalAvatarHalo className="z-[2]" />
+
+          <div className="absolute left-10 top-8 z-20 flex items-center gap-4">
             <Image
               src={assets.logo}
               alt="FutureBody"
@@ -94,9 +96,7 @@ function LoginContent() {
             <h1 className="text-6xl font-light leading-tight tracking-wide text-white">
               See Your
               <br />
-              <span className="font-semibold text-cyan-300">
-                Future Health
-              </span>
+              <span className="font-semibold text-cyan-300">Future Health</span>
             </h1>
 
             <p className="mt-8 max-w-lg text-xl leading-9 text-slate-300">
@@ -111,10 +111,7 @@ function LoginContent() {
               ["Body Systems", "Understand 8 core body systems."],
               ["Intervention Simulator", "Test changes before you make them."],
             ].map(([title, text]) => (
-              <div
-                key={title}
-                className="rounded-2xl border border-cyan-300/10 bg-slate-950/60 p-5 backdrop-blur-sm"
-              >
+              <div key={title} className="rounded-2xl border border-cyan-300/10 bg-slate-950/60 p-5 backdrop-blur-sm">
                 <div className="text-sm font-bold uppercase tracking-[0.18em] text-cyan-300">
                   {title}
                 </div>
@@ -133,27 +130,16 @@ function LoginContent() {
               className="h-[820px] w-auto object-contain drop-shadow-[0_0_70px_rgba(34,211,238,.95)]"
             />
           </div>
-
-          <div className="absolute left-[42%] top-1/2 h-[460px] w-[460px] -translate-y-1/2 rounded-full border border-cyan-300/10" />
-          <div className="absolute left-[48%] top-1/2 h-[300px] w-[300px] -translate-y-1/2 rounded-full border border-cyan-300/10" />
         </section>
 
         <section className="flex items-center justify-center">
           <div className="w-full max-w-xl rounded-[32px] border border-cyan-300/15 bg-slate-950/55 p-8 shadow-[0_0_45px_rgba(8,145,178,.16)] backdrop-blur">
             <div className="mb-10 text-center">
               <div className="mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-full border border-cyan-300/30 bg-cyan-400/10">
-                <Image
-                  src={assets.logo}
-                  alt="FutureBody"
-                  width={52}
-                  height={52}
-                  className="h-12 w-12 object-contain"
-                />
+                <Image src={assets.logo} alt="FutureBody" width={52} height={52} className="h-12 w-12 object-contain" />
               </div>
 
-              <h2 className="text-4xl font-semibold text-white">
-                Welcome Back
-              </h2>
+              <h2 className="text-4xl font-semibold text-white">Welcome Back</h2>
               <p className="mt-3 text-slate-400">
                 Log in to continue your health journey.
               </p>
@@ -229,11 +215,11 @@ function LoginContent() {
             </a>
 
             <div className="mt-8 text-center text-slate-400">
-  New to FutureBody?{" "}
-  <a href="/register" className="text-cyan-300 hover:text-cyan-200">
-    Create an account
-  </a>
-</div>
+              New to FutureBody?{" "}
+              <a href="/register" className="text-cyan-300 hover:text-cyan-200">
+                Create an account
+              </a>
+            </div>
           </div>
         </section>
       </div>
