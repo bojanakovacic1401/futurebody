@@ -1,10 +1,11 @@
 import Image from "next/image";
 import Link from "next/link";
-import { Wifi, UserCircle } from "lucide-react";
+import { UserCircle, Wifi } from "lucide-react";
 import { LogoutButton } from "@/components/auth/LogoutButton";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard" },
+  { href: "/onboarding", label: "Inputs" },
   { href: "/body", label: "Body" },
   { href: "/timeline", label: "Timeline" },
   { href: "/simulate", label: "Simulate" },
@@ -20,23 +21,23 @@ export function Header() {
           <Image
             src="/assets/logo-b.png"
             alt="FutureBody"
-            width={46}
-            height={46}
+            width={54}
+            height={54}
             priority
-            className="h-10 w-10 object-contain drop-shadow-[0_0_18px_rgba(34,211,238,.9)]"
+            className="h-12 w-12 object-contain drop-shadow-[0_0_18px_rgba(34,211,238,.9)]"
           />
 
-          <span className="text-2xl font-bold tracking-wide text-white">
+          <span className="hidden text-2xl font-bold tracking-wide text-white sm:block">
             FutureBody
           </span>
         </Link>
 
-        <nav className="hidden items-center gap-8 xl:flex">
+        <nav className="hidden items-center gap-6 2xl:flex">
           {navItems.map((item) => (
             <Link
               key={item.href}
               href={item.href}
-              className="text-xs font-bold uppercase tracking-[0.32em] text-slate-400 transition hover:text-cyan-300"
+              className="text-xs font-bold uppercase tracking-[0.26em] text-slate-400 transition hover:text-cyan-300"
             >
               {item.label}
             </Link>

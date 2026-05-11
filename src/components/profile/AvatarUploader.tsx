@@ -2,11 +2,26 @@
 
 import Image from "next/image";
 import { ChangeEvent, useState } from "react";
-import { Activity, Dumbbell, Moon, Scale, Upload, WandSparkles } from "lucide-react";
+import {
+  Activity,
+  CheckCircle2,
+  Upload,
+  WandSparkles,
+  XCircle,
+} from "lucide-react";
+import {
+  resetStoredDashboardAvatar,
+  saveStoredDashboardAvatar,
+} from "@/lib/health/storage";
 
 type GenerationScenario = "baseline" | "improved" | "risk";
 
-type ActivityLevel = "sedentary" | "light" | "moderate" | "active" | "very_active";
+type ActivityLevel =
+  | "sedentary"
+  | "light"
+  | "moderate"
+  | "active"
+  | "very_active";
 
 export function AvatarUploader() {
   const [uploadedUrl, setUploadedUrl] = useState("");
@@ -20,7 +35,8 @@ export function AvatarUploader() {
   const [bodyFat, setBodyFat] = useState(18);
   const [sleepHours, setSleepHours] = useState(6.5);
   const [stress, setStress] = useState(55);
-  const [activityLevel, setActivityLevel] = useState<ActivityLevel>("moderate");
+  const [activityLevel, setActivityLevel] =
+    useState<ActivityLevel>("moderate");
   const [goalWeightKg, setGoalWeightKg] = useState(68);
 
   async function getApiMessage(response: Response) {
@@ -30,9 +46,6 @@ export function AvatarUploader() {
       const data = await response.json();
       return data.message || "Request failed.";
     }
-
-    const text = await response.text();
-    console.error("Non JSON response:", text);
 
     return `API returned non-JSON. Status: ${response.status}. URL: ${response.url}`;
   }
@@ -120,13 +133,29 @@ export function AvatarUploader() {
       }
 
       setGeneratedUrl(data.imageUrl);
-      setMessage("Future avatar generated.");
+      setMessage("Future avatar generated. You can now use it on dashboard.");
     } catch (error) {
       console.error("Generation client error:", error);
       setMessage("Generation failed on client.");
     } finally {
       setLoading(false);
     }
+  }
+
+  function useAsDashboardAvatar() {
+  if (!generatedUrl) {
+    setMessage("Generate an avatar first.");
+    return;
+  }
+
+  saveStoredDashboardAvatar(generatedUrl, scenario);
+
+  setMessage(`Dashboard avatar saved: ${generatedUrl}`);
+}
+
+  function clearDashboardAvatar() {
+    resetStoredDashboardAvatar();
+    setMessage("Dashboard avatar cleared. Dashboard will use default hologram.");
   }
 
   return (
@@ -140,7 +169,8 @@ export function AvatarUploader() {
             Future Avatar
           </h2>
           <p className="mt-2 text-sm text-slate-400">
-            Upload a photo, enter body data, and generate a realistic future health avatar.
+            Upload a photo, enter body data, generate a realistic future health
+            avatar, then use it on your dashboard.
           </p>
         </div>
 
@@ -197,7 +227,7 @@ export function AvatarUploader() {
 
             <div className="rounded-2xl border border-cyan-300/10 bg-slate-950/50 p-4">
               <div className="mb-4 flex items-center gap-3">
-                <Scale className="text-cyan-300" size={20} />
+                <Activity className="text-cyan-300" size={20} />
                 <div className="text-sm font-bold uppercase tracking-[0.16em] text-white">
                   Body Inputs
                 </div>
@@ -305,6 +335,27 @@ export function AvatarUploader() {
               <WandSparkles size={20} />
               {loading ? "Processing..." : "Generate Avatar"}
             </button>
+
+            <div className="grid gap-3 md:grid-cols-2">
+              <button
+                type="button"
+                onClick={useAsDashboardAvatar}
+                disabled={!generatedUrl}
+                className="flex h-12 items-center justify-center gap-2 rounded-xl border border-emerald-300/30 bg-emerald-400/10 text-xs font-bold uppercase tracking-[0.14em] text-emerald-200 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <CheckCircle2 size={18} />
+                Use on Dashboard
+              </button>
+
+              <button
+                type="button"
+                onClick={clearDashboardAvatar}
+                className="flex h-12 items-center justify-center gap-2 rounded-xl border border-red-300/20 bg-red-400/10 text-xs font-bold uppercase tracking-[0.14em] text-red-200"
+              >
+                <XCircle size={18} />
+                Clear Avatar
+              </button>
+            </div>
 
             {message ? (
               <p className="rounded-xl border border-cyan-300/10 bg-slate-950/45 p-3 text-sm text-slate-400">

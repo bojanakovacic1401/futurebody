@@ -233,6 +233,16 @@ export async function POST(request: Request) {
     const scenario = String(body.scenario || "baseline") as Scenario;
     const metrics = normalizeMetrics(body.metrics);
 
+if (process.env.USE_MOCK_AI === "true") {
+  return NextResponse.json({
+    ok: true,
+    scenario,
+    imageUrl,
+    message:
+      "Mock AI mode active. Returning uploaded image without using OpenAI credits.",
+  });
+}
+
     if (!imageUrl) {
       return NextResponse.json(
         {
